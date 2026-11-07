@@ -50,7 +50,8 @@ function createAuthRouter(db) {
         method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})
       });
       const phoneResult = await phoneResponse.json();
-      const phone = phoneResult.phone_info?.purePhoneNumber || phoneResult.phone_info?.phoneNumber;
+      const phoneInfo = phoneResult.phone_info || {};
+      const phone = phoneInfo.countryCode === '86' ? phoneInfo.purePhoneNumber : (phoneInfo.countryCode && phoneInfo.purePhoneNumber ? '+'+phoneInfo.countryCode+phoneInfo.purePhoneNumber : phoneInfo.phoneNumber);
       if (!phoneResponse.ok || phoneResult.errcode || !phone) return res.status(400).json({ error:'微信手机号验证失败' });
       const current = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
       const existing = db.prepare('SELECT * FROM users WHERE phone=?').get(phone);
