@@ -1,9 +1,12 @@
 <view class="page">
-  <view class="title">课程中心</view><view class="muted intro">找到适合自己的学习方向</view>
-  <view class="card" wx:for="{{courses}}" wx:key="id">
-    <view class="row"><view class="course-title">{{item.name}}</view><view class="pill">{{item.category}}</view></view>
+  <view class="title">课程方向</view>
+  <view class="muted intro">课程安排与学习目标由工作室根据学员情况沟通确认</view>
+  <view wx:if="{{loading}}" class="card muted">正在加载课程信息…</view>
+  <view wx:elif="{{error}}" class="card muted">{{error}}</view>
+  <view wx:elif="{{courses.length}}" class="card" wx:for="{{courses}}" wx:key="id">
+    <view class="row"><view class="course-title">{{item.name}}</view><view class="pill">{{item.modeLabel}}</view></view>
     <view class="muted desc">{{item.description}}</view>
-    <view class="row"><view class="muted">{{item.audience}}</view><view class="price">{{item.priceText}}</view></view>
-    <button class="small-btn" data-id="{{item.id}}" bindtap="bookCourse">课程咨询</button>
+    <view class="row"><view class="muted">{{item.category}}</view><button class="small-btn" bindtap="bookCourse">课程咨询</button></view>
   </view>
+  <view wx:else class="card muted">课程信息正在整理中，请联系工作室负责人。</view>
 </view>
