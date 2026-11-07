@@ -226,6 +226,12 @@ function createAdminV1Router(db) {
         const addStudent=db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
         const ids=[];
         for(const item of occurrences){
+          const overlap=db.prepare(`SELECT l.id FROM lessons l
+            WHERE l.status IN ('scheduled','rescheduled') AND l.starts_at_utc < ? AND l.ends_at_utc > ?
+            AND (l.teacher_id=? OR l.room_id=? OR EXISTS(
+              SELECT 1 FROM lesson_students ls WHERE ls.lesson_id=l.id AND ls.student_id IN (${studentIds.map(()=>'?').join(',')})
+            )) LIMIT 1`).get(item.endsAtUtc,item.startsAtUtc,teacherId,roomId,...studentIds);
+          if(overlap)throw Object.assign(new Error('固定排课与已有课次冲突，冲突课次 ID：'+overlap.id),{status:409});
           const lessonId=addLesson.run(seriesId,courseId,teacherId,roomId,mode,item.startsAtUtc,item.endsAtUtc,TIME_ZONE).lastInsertRowid;
           studentIds.forEach(studentId=>addStudent.run(lessonId,studentId));
           ids.push(lessonId);
@@ -253,6 +259,12 @@ function createAdminV1Router(db) {
         const addStudent=db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
         const ids=[];
         for(const item of occurrences){
+          const overlap=db.prepare(`SELECT l.id FROM lessons l
+            WHERE l.status IN ('scheduled','rescheduled') AND l.starts_at_utc < ? AND l.ends_at_utc > ?
+            AND (l.teacher_id=? OR l.room_id=? OR EXISTS(
+              SELECT 1 FROM lesson_students ls WHERE ls.lesson_id=l.id AND ls.student_id IN (${students.map(()=>'?').join(',')})
+            )) LIMIT 1`).get(item.endsAtUtc,item.startsAtUtc,series.teacher_id,series.room_id,...students);
+          if(overlap)throw Object.assign(new Error('滚动补课与已有课次冲突，冲突课次 ID：'+overlap.id),{status:409});
           const lessonId=addLesson.run(seriesId,series.course_id,series.teacher_id,series.room_id,series.mode,item.startsAtUtc,item.endsAtUtc,TIME_ZONE).lastInsertRowid;
           students.forEach(studentId=>addStudent.run(lessonId,studentId));
           ids.push(lessonId);
@@ -323,11 +335,14 @@ function createAdminV1Router(db) {
     if (!lesson) return res.status(404).json({error:'课次不存在'});
     if (!['scheduled','rescheduled'].includes(lesson.status)) return res.status(409).json({error:'已取消、归档或完成的课次不能再次确认授课'});
     if (Date.parse(lesson.ends_at_utc) > Date.now()) return res.status(409).json({error:'课程尚未结束，不能确认实际完成授课'});
+    const studentLesson=db.prepare('SELECT teacher_confirmed FROM lesson_students WHERE lesson_id=? AND student_id=?').get(lessonId,studentId);
+    if(!studentLesson)return res.status(404).json({error:'课次学员记录不存在'});
+    if(studentLesson.teacher_confirmed)return res.status(409).json({error:'该学员已確認实际授课；如需更正请走负责人更正流程'});
     const actualTeacherId = Number(req.body?.actualTeacherId || lesson.teacher_id);
     if (!db.prepare('SELECT id FROM teachers WHERE id=? AND active=1').get(actualTeacherId))
       return res.status(400).json({error:'实际授课教师不存在或不可用'});
     const result = db.prepare(`UPDATE lesson_students SET attendance_status='present',
-      teacher_confirmed=1,actual_teacher_id=?,confirmed_at=CURRENT_TIMESTAMP WHERE lesson_id=? AND student_id=?`).run(actualTeacherId,lessonId,studentId);
+      teacher_confirmed=1,actual_teacher_id=?,confirmed_at=CURRENT_TIMESTAMP WHERE lesson_id=? AND student_id=? AND teacher_confirmed=0`).run(actualTeacherId,lessonId,studentId);
     if (!result.changes) return res.status(404).json({ error: '课次学员记录不存在' });
     record('lesson.confirmed','lesson_student',lessonId+':'+studentId,{attendanceStatus:'present',teacherConfirmed:true,actualTeacherId});
     res.json({ ok:true, teacherConfirmed:true });
@@ -341,10 +356,14 @@ function createAdminV1Router(db) {
       return res.status(400).json({ error: '消课数量必须为 1–10 的整数' });
     try {
       const consume = db.transaction(() => {
-        const attendance = db.prepare(`SELECT ls.teacher_confirmed,ls.attendance_status,l.course_id
+        const attendance = db.prepare(`SELECT ls.teacher_confirmed,ls.attendance_status,l.course_id,l.status AS lesson_status,l.ends_at_utc
           FROM lesson_students ls JOIN lessons l ON l.id=ls.lesson_id
           WHERE ls.lesson_id=? AND ls.student_id=?`).get(lessonId,studentId);
         if (!attendance) throw Object.assign(new Error('课次学员记录不存在'),{status:404});
+        if (!['scheduled','rescheduled'].includes(attendance.lesson_status))
+          throw Object.assign(new Error('已取消或已关闭的课次不能消课'),{status:409});
+        if (Date.parse(attendance.ends_at_utc)>Date.now())
+          throw Object.assign(new Error('课程尚未结束，不能消课'),{status:409});
         if (!attendance.teacher_confirmed || attendance.attendance_status !== 'present')
           throw Object.assign(new Error('必须先确认实际完成授课，才能消课'),{status:409});
         const prior = db.prepare(`SELECT COUNT(*) AS n FROM entitlement_transactions c
