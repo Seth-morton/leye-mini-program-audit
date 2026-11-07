@@ -182,6 +182,8 @@ function createAdminV1Router(db) {
       return res.status(400).json({ error: '课程、教师、教室、学员、时间或教学模式无效' });
     const exists = db.prepare('SELECT (SELECT COUNT(*) FROM courses_catalog WHERE id=?) AS c,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT COUNT(*) FROM rooms WHERE id=? AND active=1) AS r').get(courseId,teacherId,roomId);
     if (!exists.c || !exists.t || !exists.r) return res.status(400).json({ error: '课程、教师或教室不存在/不可用' });
+    const studentCount = db.prepare(`SELECT COUNT(*) AS n FROM students WHERE id IN (${studentIds.map(() => '?').join(',')}) AND status='active'`).get(...studentIds).n;
+    if (studentCount !== studentIds.length) return res.status(400).json({ error: '学员不存在或不可用' });
     if (mode === 'one_to_one' && studentIds.length !== 1) return res.status(400).json({ error: '一对一课程只能安排一名学员' });
     const overlap = db.prepare(`SELECT l.id FROM lessons l
       WHERE l.status IN ('scheduled','rescheduled') AND l.starts_at_utc < ? AND l.ends_at_utc > ?
@@ -250,8 +252,10 @@ function createAdminV1Router(db) {
           if (use) { insert.run(item.lot.id,studentId,lessonId,'consume_paid','paid',use,'实际授课消课'); remaining-=use; }
           if (!remaining) break;
         }
-        record('lesson.consume','lesson',lessonId,{studentId,quantity});
-        return { consumed:quantity };
+        const unconsumed = db.prepare(`SELECT COUNT(*) AS n FROM lesson_students ls WHERE ls.lesson_id=? AND NOT EXISTS (SELECT 1 FROM entitlement_transactions et WHERE et.lesson_id=ls.lesson_id AND et.student_id=ls.student_id AND et.transaction_type IN ('consume_paid','consume_bonus'))`).get(lessonId).n;
+        if (!unconsumed) db.prepare("UPDATE lessons SET status='completed' WHERE id=?").run(lessonId);
+        record('lesson.consume','lesson',lessonId,{studentId,quantity,lessonCompleted:!unconsumed});
+        return { consumed:quantity, lessonCompleted:!unconsumed };
       });
       res.json(consume());
     } catch (error) { res.status(error.status || 500).json({ error:error.message || '消课失败' }); }
