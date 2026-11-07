@@ -23,12 +23,12 @@ function loadStudents() {
     if(err.statusCode!==401)throw err;
     wx.removeStorageSync('leye_auth_token');
     return ensureSession().then(()=>request('/api/parent/students'));
-  }).then(students=>{
+  }).then(students=>request('/api/parent/profile').then(profile=>({students,profile}))).then(({students,profile})=>{
     const currentId=wx.getStorageSync('leye_selected_student_id');
     let index=students.findIndex(item=>item.id===currentId);
     if(index<0)index=0;
     if(students[index])wx.setStorageSync('leye_selected_student_id',students[index].id);
-    return {students,selectedIndex:index,selected:students[index]||null};
+    return {students,selectedIndex:index,selected:students[index]||null,profile};
   });
 }
 
