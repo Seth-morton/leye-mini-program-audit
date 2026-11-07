@@ -73,6 +73,10 @@ npm run dev
 - `POST /api/admin/v1/lesson-series/:id/extend`：滚动补充未来课次
 - `POST /api/admin/v1/lessons/:lessonId/students/:studentId/confirm`
 - `POST /api/admin/v1/lessons/:lessonId/students/:studentId/consume`
+- `GET /api/admin/v1/growth-notes`：负责人查看成长记录
+- `POST /api/admin/v1/lessons/:lessonId/students/:studentId/growth-notes`：实际授课确认后创建成长记录草稿
+- `PATCH /api/admin/v1/growth-notes/:id`：编辑未发布成长记录
+- `POST /api/admin/v1/growth-notes/:id/publish`：发布家长可见反馈并通知获授权监护人
 
 所有管理 API 使用 `Authorization: Bearer ADMIN_TOKEN`。家长 API 使用微信登录返回的会话 token，并且每次按监护人授权关系检查孩子权限。
 
@@ -92,7 +96,8 @@ GitHub Actions 会在功能分支 push 和 PR 时运行后端测试。
 - 管理员正式账号、会话和角色权限；当前管理令牌仅开发使用。
 - 管理后台完整列表、编辑、调课、请假和停课操作体验。
 - 家长端真机验证、订阅消息模板与通知触发。
-- 成长记录的负责人审核/发布管理界面。
+- 管理后台当前仍使用开发期 ADMIN_TOKEN；正式账号、会话和审计操作者身份仍需完成。
+- 成长记录草稿/发布已有基础 API 与后台表单；更正已发布记录的版本化流程仍需完成。
 - 课时更正冲正界面、退款操作员身份和凭证附件。
 - 备份恢复自动化、部署配置、HTTPS 与小程序合法域名。
 - 微信真实凭证配置后，必须用实际小程序账号完成登录、手机号授权和家庭绑定验收。
