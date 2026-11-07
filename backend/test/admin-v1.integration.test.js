@@ -85,7 +85,7 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   assert.equal(confirmed.status, 200, '已结束的正常课次可以确认授课');
   const duplicateConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(duplicateConfirm.status, 409, '重复确认授课必须拒绝');
-  db.prepare("UPDATE lessons SET status='cancelled' WHERE id=?").run(lesson.id);
+  db.prepare("UPDATE lessons SET status='studio_cancelled' WHERE id=?").run(lesson.id);
   const cancelledConsume = await call('/lessons/' + lesson.id + '/students/' + studentA + '/consume', { quantity: 1 });
   assert.equal(cancelledConsume.status, 409, '已取消课次即使存在确认标记也不得消课');
 
