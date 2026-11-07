@@ -314,9 +314,9 @@ function createAdminV1Router(db) {
     const date=String(req.query.date||'');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
     try {
-      const from=localToUtc(date+'T00:00:00',TIME_ZONE);
+      const from=localToUtc(date,'00:00',TIME_ZONE);
       const next=addLocalDays(date,1);
-      const to=localToUtc(next+'T00:00:00',TIME_ZONE);
+      const to=localToUtc(next,'00:00',TIME_ZONE);
       const rows=db.prepare(`SELECT l.id,l.status,l.mode,l.starts_at_utc,l.ends_at_utc,
         t.name AS teacher_name,r.name AS room_name,c.name AS course_name,
         ls.student_id,s.name AS student_name,ls.attendance_status,ls.teacher_confirmed,
