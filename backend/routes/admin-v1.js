@@ -433,6 +433,7 @@ function createAdminV1Router(db) {
       const result = db.transaction(() => {
         const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
         if (!order || ['refunded','cancelled'].includes(order.status)) throw Object.assign(new Error('订单不存在或已关闭'),{status:404});
+        if (db.prepare('SELECT id FROM refunds WHERE order_id=?').get(orderId)) throw Object.assign(new Error('该订单正在退款处理中，不能继续收款'),{status:409});
         if (order.received_cents + amount > order.total_cents) throw Object.assign(new Error('收款金额超过订单未收金额'),{status:409});
         db.prepare('INSERT INTO payments(order_id,amount_cents,method,received_at,reference_note) VALUES(?,?,?,?,?)')
           .run(orderId,amount,method,req.body?.receivedAt || new Date().toISOString(),String(req.body?.note || '').slice(0,500));
@@ -456,6 +457,7 @@ function createAdminV1Router(db) {
       const result = db.transaction(() => {
         const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
         if (!order || order.status === 'refunded' || order.status === 'cancelled') throw Object.assign(new Error('订单不可开通'),{status:404});
+        if (db.prepare('SELECT id FROM refunds WHERE order_id=?').get(orderId)) throw Object.assign(new Error('该订单正在退款处理中，不能开通课时'),{status:409});
         const exists = db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n;
         if (exists) throw Object.assign(new Error('该订单课时权益已经开通'),{status:409});
         db.prepare(`UPDATE orders SET early_activation=1,early_activation_reason=?,activated_at=CURRENT_TIMESTAMP WHERE id=?`).run(reason,orderId);
@@ -507,7 +509,7 @@ function createAdminV1Router(db) {
           db.prepare("UPDATE entitlement_lots SET status='refunded' WHERE id=?").run(item.lot.id);
         }
         db.prepare('UPDATE refunds SET adjustment_reason=? WHERE id=?').run(adjustmentReason,refundId);
-        db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(orderId);
+        // 退款批准后先冻结剩余课时权益；只有登记线下实际退款完成后，订单才标记为 refunded。
         record('order.refund','order',orderId,{refundId,requestedCents,approvedCents,adjustmentReason,cap,reason});
         return {refundId,approvedCents,maximumRefundCents:cap};
       })();
@@ -529,6 +531,7 @@ function createAdminV1Router(db) {
         if(actual!==refund.approved_cents&&!reason)throw Object.assign(new Error('实际退款金额与批准金额不一致，必须填写原因'),{status:400});
         db.prepare("UPDATE refunds SET actual_refunded_cents=?,status='paid',refunded_at=CURRENT_TIMESTAMP,adjustment_reason=CASE WHEN ?<>'' THEN ? ELSE adjustment_reason END WHERE id=?")
           .run(actual,reason,reason,refund.id);
+        db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(orderId);
         record('order.refund_completed','order',orderId,{refundId:refund.id,approvedCents:refund.approved_cents,actualRefundedCents:actual,adjustmentReason:reason});
         return {refundId:refund.id,status:'paid',actualRefundedCents:actual};
       })();
