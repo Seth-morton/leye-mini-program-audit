@@ -253,6 +253,129 @@ function createAdminV1Router(db) {
     } catch (error) { res.status(error.status || 500).json({ error:error.message || '消课失败' }); }
   });
 
+
+  function activateOrder(orderId, actorId = null) {
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+    if (!order) throw new Error('订单不存在');
+    if (order.early_activation && db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n) return;
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(orderId);
+    for (const item of items) {
+      const expiry = item.validity_days ? db.prepare("SELECT date('now', '+' || ? || ' days') AS d").get(item.validity_days).d : null;
+      const lotId = db.prepare(`INSERT INTO entitlement_lots
+        (student_id,order_item_id,course_id,paid_lessons,bonus_lessons,starts_on,expires_on)
+        VALUES(?,?,?,?,?,date('now'),?)`).run(order.student_id,item.id,item.course_id,item.paid_lessons,item.bonus_lessons,expiry).lastInsertRowid;
+      const grant = db.prepare(`INSERT INTO entitlement_transactions
+        (lot_id,student_id,transaction_type,bucket,quantity,note,actor_user_id,idempotency_key)
+        VALUES(?,?,?,?,?,?,?,?)`);
+      if (item.paid_lessons) grant.run(lotId,order.student_id,'grant_paid','paid',item.paid_lessons,'订单开通',actorId,`order-${orderId}-item-${item.id}-paid`);
+      if (item.bonus_lessons) grant.run(lotId,order.student_id,'grant_bonus','bonus',item.bonus_lessons,'订单赠送课时',actorId,`order-${orderId}-item-${item.id}-bonus`);
+    }
+  }
+
+  router.post('/orders', (req, res) => {
+    const studentId = Number(req.body?.studentId);
+    const productId = Number(req.body?.productId);
+    const product = db.prepare(`SELECT p.*,c.id AS course_id,c.name AS course_name
+      FROM course_products p JOIN courses_catalog c ON c.id=p.course_id
+      WHERE p.id=? AND p.active=1`).get(productId);
+    if (!Number.isInteger(studentId) || !db.prepare('SELECT id FROM students WHERE id=? AND status=?').get(studentId,'active'))
+      return res.status(404).json({ error:'学员不存在或不可用' });
+    if (!product) return res.status(404).json({ error:'课程商品不存在或已停用' });
+    const create = db.transaction(() => {
+      const orderId = db.prepare('INSERT INTO orders(student_id,total_cents) VALUES(?,?)').run(studentId,product.price_cents).lastInsertRowid;
+      const itemId = db.prepare(`INSERT INTO order_items
+        (order_id,course_id,product_id,product_name_snapshot,price_cents,paid_lessons,bonus_lessons,validity_days)
+        VALUES(?,?,?,?,?,?,?,?)`).run(orderId,product.course_id,product.id,product.name,product.price_cents,product.paid_lessons,product.bonus_lessons,product.validity_days).lastInsertRowid;
+      record('order.create','order',orderId,{studentId,productId,itemId,totalCents:product.price_cents});
+      return orderId;
+    });
+    res.status(201).json({ id:create(),status:'unpaid',totalCents:product.price_cents });
+  });
+
+  router.post('/orders/:id/payments', (req, res) => {
+    const orderId = Number(req.params.id);
+    const amount = Number(req.body?.amountCents);
+    const method = String(req.body?.method || '').trim().slice(0,40);
+    if (!Number.isSafeInteger(amount) || amount < 1 || !method) return res.status(400).json({error:'收款金额（分）和方式必填'});
+    try {
+      const result = db.transaction(() => {
+        const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+        if (!order || ['refunded','cancelled'].includes(order.status)) throw Object.assign(new Error('订单不存在或已关闭'),{status:404});
+        if (order.received_cents + amount > order.total_cents) throw Object.assign(new Error('收款金额超过订单未收金额'),{status:409});
+        db.prepare('INSERT INTO payments(order_id,amount_cents,method,received_at,reference_note) VALUES(?,?,?,?,?)')
+          .run(orderId,amount,method,req.body?.receivedAt || new Date().toISOString(),String(req.body?.note || '').slice(0,500));
+        const received = order.received_cents + amount;
+        const status = received === order.total_cents ? 'paid' : 'partially_paid';
+        db.prepare('UPDATE orders SET received_cents=?,status=? WHERE id=?').run(received,status,orderId);
+        const activated = db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n;
+        if (status === 'paid' && !activated) activateOrder(orderId);
+        record('order.payment','order',orderId,{amountCents:amount,receivedCents:received,status});
+        return {receivedCents:received,unpaidCents:order.total_cents-received,status,activated:status==='paid' && !activated};
+      })();
+      res.status(201).json(result);
+    } catch(error) { res.status(error.status || 500).json({error:error.message || '登记收款失败'}); }
+  });
+
+  router.post('/orders/:id/early-activate', (req, res) => {
+    const orderId = Number(req.params.id);
+    const reason = String(req.body?.reason || '').trim().slice(0,500);
+    if (!reason) return res.status(400).json({error:'提前开通必须填写授权原因'});
+    try {
+      const result = db.transaction(() => {
+        const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+        if (!order || order.status === 'refunded' || order.status === 'cancelled') throw Object.assign(new Error('订单不可开通'),{status:404});
+        const exists = db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n;
+        if (exists) throw Object.assign(new Error('该订单课时权益已经开通'),{status:409});
+        db.prepare(`UPDATE orders SET early_activation=1,early_activation_reason=?,activated_at=CURRENT_TIMESTAMP WHERE id=?`).run(reason,orderId);
+        activateOrder(orderId);
+        record('order.early_activate','order',orderId,{reason,receivedCents:order.received_cents});
+        return {ok:true,earlyActivation:true,receivedCents:order.received_cents,unpaidCents:order.total_cents-order.received_cents};
+      })();
+      res.json(result);
+    } catch(error) { res.status(error.status || 500).json({error:error.message || '提前开通失败'}); }
+  });
+
+  router.post('/orders/:id/refund', (req, res) => {
+    const orderId = Number(req.params.id);
+    const reason = String(req.body?.reason || '').trim().slice(0,500);
+    const approvedCents = Number(req.body?.approvedCents);
+    if (!reason || !Number.isSafeInteger(approvedCents) || approvedCents < 0)
+      return res.status(400).json({error:'退款原因和确认退款金额（分）必填'});
+    try {
+      const result = db.transaction(() => {
+        const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+        if (!order || order.status === 'refunded' || order.status === 'cancelled') throw Object.assign(new Error('订单不可退款'),{status:409});
+        if (db.prepare('SELECT id FROM refunds WHERE order_id=?').get(orderId)) throw Object.assign(new Error('每个订单只允许一次退款'),{status:409});
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(orderId);
+        const lots = db.prepare('SELECT * FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').all(orderId);
+        let paidLessons = items.reduce((n,x)=>n+x.paid_lessons,0);
+        let consumedPaid = 0;
+        const { balanceForLot, refundCap } = require('../domain/ledger');
+        const balances = lots.map(lot => {
+          const rows = db.prepare('SELECT * FROM entitlement_transactions WHERE lot_id=? ORDER BY id').all(lot.id);
+          consumedPaid += rows.filter(x=>x.transaction_type==='consume_paid').reduce((n,x)=>n+x.quantity,0);
+          return {lot,balance:balanceForLot(rows)};
+        });
+        const cap = refundCap({receivedCents:order.received_cents,paidLessons,consumedPaidLessons:consumedPaid});
+        if (approvedCents > cap) throw Object.assign(new Error(`退款金额超过可退上限 ${cap} 分`),{status:409});
+        const refundId = db.prepare(`INSERT INTO refunds(order_id,requested_cents,approved_cents,actual_refunded_cents,reason,status,refunded_at)
+          VALUES(?,?,?,?,?,'paid',CURRENT_TIMESTAMP)`).run(orderId,Number(req.body?.requestedCents ?? approvedCents),approvedCents,approvedCents,reason).lastInsertRowid;
+        const cancel = db.prepare(`INSERT INTO entitlement_transactions
+          (lot_id,student_id,transaction_type,bucket,quantity,note,idempotency_key)
+          VALUES(?,?,'refund_cancel',?,?,?,?)`);
+        for (const item of balances) {
+          if (item.balance.paid > 0) cancel.run(item.lot.id,item.lot.student_id,'paid',item.balance.paid,'退款取消剩余付费课时',`refund-${refundId}-lot-${item.lot.id}-paid`);
+          if (item.balance.bonus > 0) cancel.run(item.lot.id,item.lot.student_id,'bonus',item.balance.bonus,'退款取消剩余赠送课时',`refund-${refundId}-lot-${item.lot.id}-bonus`);
+          db.prepare("UPDATE entitlement_lots SET status='refunded' WHERE id=?").run(item.lot.id);
+        }
+        db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(orderId);
+        record('order.refund','order',orderId,{refundId,approvedCents,cap,reason});
+        return {refundId,approvedCents,maximumRefundCents:cap};
+      })();
+      res.status(201).json(result);
+    } catch(error) { res.status(error.status || 500).json({error:error.message || '退款处理失败'}); }
+  });
+
   return router;
 }
 module.exports = { createAdminV1Router };
