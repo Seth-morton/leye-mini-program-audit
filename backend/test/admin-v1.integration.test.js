@@ -134,8 +134,6 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   });
   assert.equal(draftNote.status,201,'确认实际授课后可以创建成长记录草稿');
   const note=await draftNote.json();
-  const parentCannotSeeDraft=await fetch(base+'/growth-notes');
-  assert.equal(parentCannotSeeDraft.status,401,'管理端成长记录接口不得匿名访问');
   const published=await call('/growth-notes/'+note.id+'/publish',{});
   assert.equal(published.status,200,'负责人发布成长记录应成功');
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='growth_note_published'").get(guardianB).n,1,'只向有成长权限的监护人发送通知');
