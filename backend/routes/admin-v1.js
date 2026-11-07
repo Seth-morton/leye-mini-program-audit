@@ -312,7 +312,7 @@ function createAdminV1Router(db) {
 
   router.get('/lessons/day', (req,res) => {
     const date=String(req.query.date||'');
-    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
     try {
       const from=localToUtc(date+'T00:00:00',TIME_ZONE);
       const next=addLocalDays(date,1);
