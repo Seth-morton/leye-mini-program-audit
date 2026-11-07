@@ -29,9 +29,9 @@ test('小程序 JavaScript 与 JSON 配置均可解析', () => {
 test('管理后台内嵌 JavaScript 可解析', () => {
   const file = path.join(root, 'backend/admin/management.html');
   const html = fs.readFileSync(file, 'utf8');
-  const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/gi)];
-  assert.ok(scripts.length > 0, '管理后台应包含脚本');
-  for (const match of scripts) {
-    assert.doesNotThrow(() => new vm.Script(match[1], { filename: file }), file);
-  }
+  const start = html.indexOf('<script>');
+  const end = html.indexOf('</script>', start + 8);
+  assert.ok(start >= 0 && end > start, '管理后台应包含完整脚本');
+  const script = html.slice(start + 8, end);
+  assert.doesNotThrow(() => new vm.Script(script, { filename: file }), file);
 });
