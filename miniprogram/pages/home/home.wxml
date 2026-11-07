@@ -1,15 +1,10 @@
 <view class="page">
-  <view class="hero">
-    <view class="eyebrow">LEYE MUSIC STUDIO</view>
-    <view class="hero-title">让每一份声音，<br/>都被认真听见。</view>
-    <view class="hero-sub">专业声乐教学 · 艺考指导 · 钢琴辅助</view>
-    <van-button type="primary" block round custom-class="hero-btn" bind:click="goBooking">预约试听</van-button>
-  </view>
-  <view class="row section"><view>探索课程</view><view class="more" bindtap="goCourses">全部课程 ›</view></view>
-  <view class="grid">
-    <view class="course-card" wx:for="{{courses}}" wx:key="id" bindtap="goCourses">
-      <view class="course-icon">♫</view><view class="course-name">{{item.name}}</view><view class="muted">{{item.description}}</view>
-    </view>
-  </view>
-  <view class="card about"><view class="section">认识乐也</view><view class="muted">以专业、耐心与艺术审美，陪伴每一位学员探索声音的可能。</view></view>
+  <view class="hero"><view class="eyebrow">LEYE MUSIC STUDIO</view><view class="hero-title">让每一份声音，<br/>都被认真听见。</view><view class="hero-sub">乐也声乐工作室 · 学习服务中心</view></view>
+  <view wx:if="{{loading}}" class="card muted">正在加载家庭信息…</view>
+  <view wx:elif="{{needsBinding}}" class="card"><view class="section-title">绑定家庭账号</view><view class="muted">请先完成微信手机号验证。若尚未由工作室建立家庭档案，请联系负责人。</view><button class="primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">验证手机号并绑定</button><view wx:if="{{error}}" class="muted">{{error}}</view></view>
+  <view wx:else class="card"><view class="row"><view class="section-title">我的孩子</view><picker wx:if="{{students.length>1}}" range="{{students}}" range-key="name" value="{{studentIndex}}" bindchange="chooseStudent"><view class="switch">切换孩子 ▾</view></picker></view><view class="student-name">{{studentName}}</view><view class="muted">当前查看孩子的课程与学习信息</view></view>
+  <view class="row section"><view class="section-title">近期课程</view><view class="switch" bindtap="openNotifications">通知中心 ›</view></view>
+  <view wx:if="{{lessons.length}}" class="card"><view wx:for="{{lessons}}" wx:key="id" class="lesson-row"><view class="lesson-name">{{item.courseName}}</view><view class="muted">{{item.startsAtUtc}} · {{item.teacherName}} · {{item.roomName}}</view></view></view>
+  <view wx:else class="card muted">暂无近期课程安排。</view>
+  <view class="card about" bindtap="openAbout"><view class="section-title">关于乐也</view><view class="muted">专业声乐教学 · 艺考指导 · 钢琴辅助</view></view>
 </view>
