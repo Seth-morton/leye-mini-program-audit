@@ -134,7 +134,7 @@ function createAdminV1Router(db) {
 
   router.post('/families/:id/guardian-requests', (req, res) => {
     const familyId = Number(req.params.id);
-    const phone = String(req.body?.phone || '').trim();
+    const phone = String(req.body?.phone || '').trim().replace(/[\\s()-]/g,'');
     const displayName = String(req.body?.displayName || '').trim().slice(0, 80);
     if (!/^\+?[0-9 -]{7,20}$/.test(phone)) return res.status(400).json({ error: '家长手机号格式无效' });
     const family = db.prepare('SELECT id FROM families WHERE id=?').get(familyId);
