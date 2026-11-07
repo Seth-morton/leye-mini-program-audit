@@ -515,6 +515,27 @@ function createAdminV1Router(db) {
     } catch(error) { res.status(error.status || 500).json({error:error.message || '退款处理失败'}); }
   });
 
+  // 退款审批与线下实际退款分开记录，避免审批时伪记为已打款。
+  router.post('/orders/:id/refund/complete', (req,res) => {
+    const orderId=Number(req.params.id);
+    try {
+      const result=db.transaction(()=>{
+        const refund=db.prepare('SELECT * FROM refunds WHERE order_id=?').get(orderId);
+        if(!refund)throw Object.assign(new Error('退款记录不存在'),{status:404});
+        if(refund.status!=='approved')throw Object.assign(new Error('该退款不是待完成状态'),{status:409});
+        const actual=req.body?.actualRefundedCents==null?refund.approved_cents:Number(req.body.actualRefundedCents);
+        const reason=String(req.body?.adjustmentReason||'').trim().slice(0,500);
+        if(!Number.isSafeInteger(actual)||actual<0||actual>refund.approved_cents)throw Object.assign(new Error('实际退款金额无效，不能超过批准金额'),{status:400});
+        if(actual!==refund.approved_cents&&!reason)throw Object.assign(new Error('实际退款金额与批准金额不一致，必须填写原因'),{status:400});
+        db.prepare("UPDATE refunds SET actual_refunded_cents=?,status='paid',refunded_at=CURRENT_TIMESTAMP,adjustment_reason=CASE WHEN ?<>'' THEN ? ELSE adjustment_reason END WHERE id=?")
+          .run(actual,reason,reason,refund.id);
+        record('order.refund_completed','order',orderId,{refundId:refund.id,approvedCents:refund.approved_cents,actualRefundedCents:actual,adjustmentReason:reason});
+        return {refundId:refund.id,status:'paid',actualRefundedCents:actual};
+      })();
+      res.json(result);
+    } catch(error) { res.status(error.status||500).json({error:error.message||'登记实际退款失败'}); }
+  });
+
   return router;
 }
 module.exports = { createAdminV1Router };
