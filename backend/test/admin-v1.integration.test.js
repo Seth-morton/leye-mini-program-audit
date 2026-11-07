@@ -116,6 +116,8 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const stopConsume=await call('/lessons/'+cancelledLesson.id+'/students/'+studentA+'/consume',{quantity:1});
   assert.equal(stopConsume.status,409,'工作室停课不得消课');
 
+  const growthGuardianId=db.prepare("INSERT INTO users(phone,display_name,role) VALUES('15555550124','成长记录家长','guardian')").run().lastInsertRowid;
+  db.prepare("INSERT INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth) VALUES(?,?,'approved',1,0,1)").run(studentB,growthGuardianId);
   const growthLessonResponse=await call('/lessons',{
     courseId,teacherId,roomId,studentIds:[studentB],mode:'small_group',
     startsAtUtc:'2030-01-04T16:00:00.000Z',endsAtUtc:'2030-01-04T17:00:00.000Z'
@@ -136,7 +138,7 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const note=await draftNote.json();
   const published=await call('/growth-notes/'+note.id+'/publish',{});
   assert.equal(published.status,200,'负责人发布成长记录应成功');
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='growth_note_published'").get(guardianB).n,1,'只向有成长权限的监护人发送通知');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='growth_note_published'").get(growthGuardianId).n,1,'只向有成长权限的监护人发送通知');
   const duplicatePublish=await call('/growth-notes/'+note.id+'/publish',{});
   assert.equal(duplicatePublish.status,409,'已发布成长记录不能重复发布');
   assert.equal(db.prepare("SELECT status FROM lesson_notes WHERE id=?").get(note.id).status,'published');
