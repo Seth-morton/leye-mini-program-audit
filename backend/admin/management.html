@@ -70,7 +70,7 @@ $('refundCompleteForm').addEventListener('submit',async e=>{
 });
 
 function toChicagoUtc(value){const target=Date.parse(value+':00Z');if(!Number.isFinite(target))throw Error('课程时间无效');let guess=target;const fmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});for(let i=0;i<5;i++){const p=Object.fromEntries(fmt.formatToParts(new Date(guess)).map(x=>[x.type,x.value]));const wall=Date.UTC(Number(p.year),Number(p.month)-1,Number(p.day),Number(p.hour),Number(p.minute),Number(p.second));const delta=target-wall;if(!delta)break;guess+=delta;}const p=Object.fromEntries(fmt.formatToParts(new Date(guess)).map(x=>[x.type,x.value]));if(Number(p.year)!==Number(value.slice(0,4))||Number(p.month)!==Number(value.slice(5,7))||Number(p.day)!==Number(value.slice(8,10))||Number(p.hour)!==Number(value.slice(11,13))||Number(p.minute)!==Number(value.slice(14,16)))throw Error('该时间在芝加哥时区因夏令时切换而不存在，请选择其他时间');return new Date(guess).toISOString()}
-$('lessonDay').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const studioDateParts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));$('lessonDay').value=studioDateParts.year+'-'+studioDateParts.month+'-'+studioDateParts.day;
 $('loadLessonDay').onclick=async()=>{
   const date=$('lessonDay').value;
   if(!date){$('dailyLessons').textContent='请先选择日期';return;}
