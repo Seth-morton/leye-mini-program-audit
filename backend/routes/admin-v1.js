@@ -392,7 +392,7 @@ function createAdminV1Router(db) {
     if (order.early_activation && db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n) return;
     const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(orderId);
     for (const item of items) {
-      const expiry = item.validity_days ? db.prepare("SELECT date('now', '+' || ? || ' days') AS d").get(item.validity_days).d : null;
+      const expiry = item.validity_days ? addLocalDays(utcToLocalDate(new Date().toISOString(),TIME_ZONE),item.validity_days) : null;
       const lotId = db.prepare(`INSERT INTO entitlement_lots
         (student_id,order_item_id,course_id,paid_lessons,bonus_lessons,starts_on,expires_on)
         VALUES(?,?,?,?,?,date('now'),?)`).run(order.student_id,item.id,item.course_id,item.paid_lessons,item.bonus_lessons,expiry).lastInsertRowid;
@@ -497,7 +497,7 @@ function createAdminV1Router(db) {
         const cap = refundCap({receivedCents:order.received_cents,paidLessons,consumedPaidLessons:consumedPaid});
         if (approvedCents > cap) throw Object.assign(new Error(`退款金额超过可退上限 ${cap} 分`),{status:409});
         const refundId = db.prepare(`INSERT INTO refunds(order_id,requested_cents,approved_cents,actual_refunded_cents,reason,status,refunded_at)
-          VALUES(?,?,?,?,?,'paid',CURRENT_TIMESTAMP)`).run(orderId,Number(req.body?.requestedCents ?? approvedCents),approvedCents,approvedCents,reason).lastInsertRowid;
+          VALUES(?,?,?,0,?,'approved',NULL)`).run(orderId,requestedCents,approvedCents,reason).lastInsertRowid;
         const cancel = db.prepare(`INSERT INTO entitlement_transactions
           (lot_id,student_id,transaction_type,bucket,quantity,note,idempotency_key)
           VALUES(?,?,'refund_cancel',?,?,?,?)`);
