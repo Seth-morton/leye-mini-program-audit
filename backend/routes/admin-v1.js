@@ -139,8 +139,10 @@ function createAdminV1Router(db) {
     if (!/^\+?[0-9]{7,20}$/.test(phone)) return res.status(400).json({ error: '家长手机号格式无效' });
     const family = db.prepare('SELECT id FROM families WHERE id=?').get(familyId);
     if (!family) return res.status(404).json({ error: '家庭不存在' });
+    const existingUser = db.prepare('SELECT id,role FROM users WHERE phone=?').get(phone);
+    if (existingUser && existingUser.role !== 'guardian') return res.status(409).json({error:'该手机号已关联非家长账号，请先核实账号归属'});
     const create = db.transaction(() => {
-      let user = db.prepare('SELECT id FROM users WHERE phone=? AND role=?').get(phone, 'guardian');
+      let user = existingUser;
       if (!user) {
         const id = db.prepare('INSERT INTO users(phone,display_name,role) VALUES(?,?,?)')
           .run(phone, displayName, 'guardian').lastInsertRowid;
@@ -161,9 +163,10 @@ function createAdminV1Router(db) {
     const member = db.prepare('SELECT id,family_id,user_id FROM family_members WHERE id=? AND status=?').get(id, 'pending');
     if (!member) return res.status(404).json({ error: '待审核关联不存在' });
     db.prepare(`UPDATE family_members SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
-    db.prepare(`INSERT OR IGNORE INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth)
+    db.prepare(`INSERT INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth)
       SELECT s.id,fm.user_id,'approved',fm.can_view_schedule,fm.can_view_finance,fm.can_view_growth
-      FROM students s JOIN family_members fm ON fm.family_id=s.family_id WHERE fm.id=?`).run(id);
+      FROM students s JOIN family_members fm ON fm.family_id=s.family_id WHERE fm.id=?
+      ON CONFLICT(student_id,user_id) DO UPDATE SET status='approved',can_view_schedule=excluded.can_view_schedule,can_view_finance=excluded.can_view_finance,can_view_growth=excluded.can_view_growth`).run(id);
     record('guardian.binding_approved', 'family_member', id, { familyId: member.family_id, userId: member.user_id });
     res.json({ ok: true });
   });
