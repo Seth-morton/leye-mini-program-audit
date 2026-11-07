@@ -147,6 +147,112 @@ function createAdminV1Router(db) {
     res.json({ ok: true });
   });
 
+
+  router.get('/lessons', (req, res) => {
+    const from = String(req.query.from || '');
+    const to = String(req.query.to || '');
+    if (!from || !to || !Number.isFinite(Date.parse(from)) || !Number.isFinite(Date.parse(to)) || Date.parse(to) <= Date.parse(from))
+      return res.status(400).json({ error: '请提供有效的 from / to UTC 时间范围' });
+    const rows = db.prepare(`SELECT l.*,t.name AS teacher_name,r.name AS room_name,c.name AS course_name,
+      GROUP_CONCAT(s.name, '、') AS student_names
+      FROM lessons l JOIN teachers t ON t.id=l.teacher_id JOIN rooms r ON r.id=l.room_id
+      JOIN courses_catalog c ON c.id=l.course_id
+      LEFT JOIN lesson_students ls ON ls.lesson_id=l.id LEFT JOIN students s ON s.id=ls.student_id
+      WHERE l.starts_at_utc >= ? AND l.starts_at_utc < ?
+      GROUP BY l.id ORDER BY l.starts_at_utc`).all(from, to);
+    res.json(rows);
+  });
+
+  router.post('/lessons', (req, res) => {
+    const courseId = Number(req.body?.courseId);
+    const teacherId = Number(req.body?.teacherId);
+    const roomId = Number(req.body?.roomId);
+    const studentIds = Array.isArray(req.body?.studentIds) ? [...new Set(req.body.studentIds.map(Number))] : [];
+    const start = String(req.body?.startsAtUtc || '');
+    const end = String(req.body?.endsAtUtc || '');
+    const mode = req.body?.mode;
+    if (![courseId,teacherId,roomId].every(x => Number.isInteger(x) && x > 0) ||
+        !studentIds.length || studentIds.some(x => !Number.isInteger(x) || x < 1) ||
+        !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start) ||
+        !['one_to_one','small_group','collective','exam'].includes(mode))
+      return res.status(400).json({ error: '课程、教师、教室、学员、时间或教学模式无效' });
+    const exists = db.prepare('SELECT (SELECT COUNT(*) FROM courses_catalog WHERE id=?) AS c,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT COUNT(*) FROM rooms WHERE id=? AND active=1) AS r').get(courseId,teacherId,roomId);
+    if (!exists.c || !exists.t || !exists.r) return res.status(400).json({ error: '课程、教师或教室不存在/不可用' });
+    if (mode === 'one_to_one' && studentIds.length !== 1) return res.status(400).json({ error: '一对一课程只能安排一名学员' });
+    const overlap = db.prepare(`SELECT l.id FROM lessons l
+      WHERE l.status IN ('scheduled','rescheduled') AND l.starts_at_utc < ? AND l.ends_at_utc > ?
+      AND (l.teacher_id=? OR l.room_id=? OR EXISTS(
+        SELECT 1 FROM lesson_students ls WHERE ls.lesson_id=l.id AND ls.student_id IN (${studentIds.map(() => '?').join(',')})
+      )) LIMIT 1`).get(end,start,teacherId,roomId,...studentIds);
+    if (overlap) return res.status(409).json({ error: '教师、教室或学员时间冲突', conflictingLessonId: overlap.id });
+    const create = db.transaction(() => {
+      const lessonId = db.prepare(`INSERT INTO lessons(course_id,teacher_id,room_id,mode,starts_at_utc,ends_at_utc)
+        VALUES(?,?,?,?,?,?)`).run(courseId,teacherId,roomId,mode,start,end).lastInsertRowid;
+      const insert = db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
+      studentIds.forEach(studentId => insert.run(lessonId,studentId));
+      record('lesson.create','lesson',lessonId,{courseId,teacherId,roomId,studentIds,start,end,mode});
+      return lessonId;
+    });
+    res.status(201).json({ id:create(), status:'scheduled' });
+  });
+
+  router.post('/lessons/:lessonId/students/:studentId/confirm', (req, res) => {
+    const lessonId = Number(req.params.lessonId);
+    const studentId = Number(req.params.studentId);
+    const result = db.prepare(`UPDATE lesson_students SET attendance_status='present',
+      teacher_confirmed=1,confirmed_at=CURRENT_TIMESTAMP WHERE lesson_id=? AND student_id=?`).run(lessonId,studentId);
+    if (!result.changes) return res.status(404).json({ error: '课次学员记录不存在' });
+    record('lesson.confirmed','lesson_student',lessonId+':'+studentId,{attendanceStatus:'present',teacherConfirmed:true});
+    res.json({ ok:true, teacherConfirmed:true });
+  });
+
+  router.post('/lessons/:lessonId/students/:studentId/consume', (req, res) => {
+    const lessonId = Number(req.params.lessonId);
+    const studentId = Number(req.params.studentId);
+    const quantity = Number(req.body?.quantity || 1);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10)
+      return res.status(400).json({ error: '消课数量必须为 1–10 的整数' });
+    try {
+      const consume = db.transaction(() => {
+        const attendance = db.prepare(`SELECT ls.teacher_confirmed,ls.attendance_status,l.course_id
+          FROM lesson_students ls JOIN lessons l ON l.id=ls.lesson_id
+          WHERE ls.lesson_id=? AND ls.student_id=?`).get(lessonId,studentId);
+        if (!attendance) throw Object.assign(new Error('课次学员记录不存在'),{status:404});
+        if (!attendance.teacher_confirmed || attendance.attendance_status !== 'present')
+          throw Object.assign(new Error('必须先确认实际完成授课，才能消课'),{status:409});
+        const prior = db.prepare(`SELECT COUNT(*) AS n FROM entitlement_transactions
+          WHERE lesson_id=? AND student_id=? AND transaction_type IN ('consume_paid','consume_bonus')`).get(lessonId,studentId).n;
+        if (prior) throw Object.assign(new Error('该课次已消课，禁止重复操作'),{status:409});
+        const lots = db.prepare(`SELECT * FROM entitlement_lots WHERE student_id=? AND course_id=?
+          AND status='active' AND (expires_on IS NULL OR expires_on>=date('now')) ORDER BY id`).all(studentId,attendance.course_id);
+        const { balanceForLot } = require('../domain/ledger');
+        const entries = lots.map(lot => {
+          const rows = db.prepare('SELECT * FROM entitlement_transactions WHERE lot_id=? ORDER BY id').all(lot.id);
+          return { lot, balance:balanceForLot(rows) };
+        });
+        const total = entries.reduce((sum,x)=>sum+x.balance.bonus+x.balance.paid,0);
+        if (total < quantity) throw Object.assign(new Error('可用课时不足，不能消课'),{status:409});
+        let remaining = quantity;
+        const insert = db.prepare(`INSERT INTO entitlement_transactions
+          (lot_id,student_id,lesson_id,transaction_type,bucket,quantity,note)
+          VALUES(?,?,?,?,?,?,?)`);
+        for (const item of entries) {
+          const use = Math.min(remaining,item.balance.bonus);
+          if (use) { insert.run(item.lot.id,studentId,lessonId,'consume_bonus','bonus',use,'实际授课消课'); remaining-=use; }
+        }
+        for (const item of entries) {
+          const current = balanceForLot(db.prepare('SELECT * FROM entitlement_transactions WHERE lot_id=? ORDER BY id').all(item.lot.id));
+          const use = Math.min(remaining,current.paid);
+          if (use) { insert.run(item.lot.id,studentId,lessonId,'consume_paid','paid',use,'实际授课消课'); remaining-=use; }
+          if (!remaining) break;
+        }
+        record('lesson.consume','lesson',lessonId,{studentId,quantity});
+        return { consumed:quantity };
+      });
+      res.json(consume());
+    } catch (error) { res.status(error.status || 500).json({ error:error.message || '消课失败' }); }
+  });
+
   return router;
 }
 module.exports = { createAdminV1Router };
