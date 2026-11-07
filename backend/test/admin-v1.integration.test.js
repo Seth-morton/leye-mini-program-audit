@@ -57,6 +57,15 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const earlyConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(earlyConfirm.status, 409, '课程尚未结束不得确认实际授课');
 
+  db.prepare("UPDATE lessons SET ends_at_utc='2020-01-01T17:00:00.000Z' WHERE id=?").run(lesson.id);
+  const confirmed = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
+  assert.equal(confirmed.status, 200, '已结束的正常课次可以确认授课');
+  const duplicateConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
+  assert.equal(duplicateConfirm.status, 409, '重复确认授课必须拒绝');
+  db.prepare("UPDATE lessons SET status='cancelled' WHERE id=?").run(lesson.id);
+  const cancelledConsume = await call('/lessons/' + lesson.id + '/students/' + studentA + '/consume', { quantity: 1 });
+  assert.equal(cancelledConsume.status, 409, '已取消课次即使存在确认标记也不得消课');
+
   const orderId = db.prepare("INSERT INTO orders(student_id,status,total_cents,received_cents) VALUES(?,'paid',10000,10000)").run(studentA).lastInsertRowid;
   db.prepare("INSERT INTO order_items(order_id,course_id,product_name_snapshot,price_cents,paid_lessons,bonus_lessons) VALUES(?,?,?,?,?,?)")
     .run(orderId, courseId, '10节声乐课', 10000, 10, 0);
