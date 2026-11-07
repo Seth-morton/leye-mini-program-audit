@@ -1,6 +1,3 @@
 {
-  "navigationBarTitleText": "关于乐也",
-  "usingComponents": {
-    "van-image": "@vant/weapp/image/index"
-  }
+  "navigationBarTitleText": "关于乐也"
 }
