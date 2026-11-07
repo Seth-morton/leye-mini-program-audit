@@ -1,75 +1,98 @@
-# 乐也微信小程序 · MVP v2
+# 乐也教学管理系统 V1.0（开发中）
 
-本项目是可本地运行、可继续开发的微信小程序基础源码，按“先把预约与教务核心链路做可靠”的原则设计。
-
-## 产品边界
-- 家长端：品牌首页、课程浏览、试听/咨询预约、预约状态查看（演示版本地记录）
-- 工作室端：轻量管理后台，可查看预约、确认/拒绝预约
-- 后端：课程 API、预约 API、管理 API、SQLite 持久化
-- 不包含微信支付；线下收款后由工作室管理员登记并开通课程的正式学员模块属于下一阶段
-- 不包含真实微信登录。当前以开发期匿名预约为基础，正式上线前必须接入 `wx.login` + 服务端身份校验
+本分支在原微信小程序预约 MVP 基础上增量升级。旧版 `courses` 与 `bookings` 数据表保留，历史预约记录不删除；新版核心流程为负责人建档、线下沟通、后台排课、确认授课后手动消课、线下收款与家长只读查看。
 
 ## 技术栈
-- 微信原生小程序：WXML / WXSS / JavaScript
-- Node.js 20+
-- Express 4
-- SQLite（better-sqlite3）
+- 微信原生小程序（WXML / WXSS / JavaScript）+ Vant Weapp
+- Node.js 20+ / Express 4
+- SQLite（better-sqlite3），编号 SQL migrations
+- 管理端 Web 页面与家长微信小程序共用后端 API
+- 工作室时区：`America/Chicago`；数据库时间保存 UTC
 
-## 目录
-```text
-miniprogram/       小程序源码
-backend/           API 服务、数据库、管理后台
-```
+## 后端启动
 
-## 1. 启动后端
 ```bash
 cd backend
 cp .env.example .env
 npm install
 npm run dev
 ```
-默认 `http://localhost:3000`。首次启动自动创建 `data/leye.sqlite` 并写入演示课程。
 
-环境变量：
-- `PORT`：服务端端口，默认 3000
-- `ADMIN_TOKEN`：管理后台 API 密钥，必须在运行前修改
-- `CORS_ORIGIN`：允许的来源；开发默认 `*`，生产环境必须设置为实际来源/域名
-- `DB_PATH`：数据库文件路径，默认 `./data/leye.sqlite`
+编辑 `.env`：
+- `PORT`：默认 3000
+- `ADMIN_TOKEN`：仅供本地开发的管理 API 令牌，必须替换为随机长密钥
+- `CORS_ORIGIN`：开发可按需配置，生产必须设置为明确来源
+- `DB_PATH`：SQLite 文件路径
+- `WX_APP_ID` / `WX_APP_SECRET`：微信小程序登录及手机号验证所需服务端凭证
 
-## 2. 运行小程序
-1. 微信开发者工具导入 `miniprogram` 目录。
-2. 打开 `miniprogram/config.js`，将 `apiBase` 改为后端地址。
-3. 本地模拟器可使用 `http://127.0.0.1:3000`（开发者工具需关闭合法域名校验）。
-4. 真机需使用手机可访问的局域网 IP 或 HTTPS 测试域名；正式版必须配置 HTTPS 合法域名。
-5. 点击“预约”提交后，数据会写入后端 SQLite。
+启动时会自动运行 `backend/migrations/*.sql`。迁移只增量创建新表和索引，不删除旧表。请在升级前备份数据库。
 
-## 3. 管理后台
-启动后访问 `http://localhost:3000/admin`。
-在后台输入 `.env` 中的 `ADMIN_TOKEN`，即可加载预约并更新状态。
-后台当前仅适用于可信的本地/测试环境。生产部署前应换成微信管理员登录、服务端会话、权限分级、CSRF 防护和审计日志；不要将管理令牌公开或写入小程序。
+## 管理后台
 
-## 4. API
-- `GET /api/health`
-- `GET /api/courses`
-- `POST /api/bookings`
-- `GET /api/bookings/:id`（通过预约编号和联系电话后四位查询，演示用途）
-- `GET /api/admin/bookings`（Bearer 管理令牌）
-- `PATCH /api/admin/bookings/:id`（Bearer 管理令牌；状态 `pending|confirmed|declined|completed`）
+启动后访问：
 
-预约提交字段：`studentName`、`guardianName`（可选）、`phone`、`courseId`、`preferredDate`（可选）、`preferredTime`（可选）、`note`（可选）。
+`http://localhost:3000/admin/management.html`
 
-## 5. 正式上线前的必做事项
-- 接入微信登录、用户/监护人身份绑定与权限控制
-- 配置 HTTPS、微信合法域名、生产 CORS
-- 预约查询改为登录后仅可查看本人预约
-- 后台采用安全身份认证，不使用静态共享 token
-- 增加预约时间冲突、教师/教室资源校验
-- 隐私政策、个人信息收集告知与用户授权流程
-- 数据备份、监控、限流、日志、异常告警
-- 真实业务测试、微信审核与发布
+开发版管理后台可以创建家庭、学员、教师、教室、课程、课程商品和订单；登记分次线下收款；授权提前开通；安排单次或每周固定课程；确认实际上课并消课；登记一次性退款。
+
+当前管理后台仍使用开发期 `ADMIN_TOKEN`。它不是正式生产身份认证方案，不得直接公开部署。
+
+## 家长小程序
+
+1. 使用微信开发者工具导入 `miniprogram` 目录。
+2. 配置 `miniprogram/config.js` 中的后端地址。模拟器可用本机地址；真机必须使用手机可访问的局域网地址或 HTTPS 域名。
+3. 服务端配置 `WX_APP_ID` 和 `WX_APP_SECRET`。
+4. 家长通过微信登录并授权手机号；负责人先建立家庭和孩子档案、添加监护人手机号，家长完成身份验证后，负责人审核家庭关联。
+5. 审核通过后，家长可以切换孩子查看课表、成长记录、课时和通知。
+
+家长端不提供自主预约、线上购买、在线支付、线上请假或补课预约。续费由线下沟通完成，负责人在管理端新增课时权益批次。
+
+## 已落地的主要 API
+
+- `POST /api/auth/wechat-login`：微信登录换取服务端会话
+- `POST /api/auth/phone`：微信手机号验证及家庭监护人账号关联
+- `GET /api/parent/students`：当前监护人获授权的孩子
+- `GET /api/parent/students/:studentId/schedule`
+- `GET /api/parent/students/:studentId/growth`
+- `GET /api/parent/students/:studentId/entitlements`
+- `GET /api/parent/notifications`
+- `GET/POST /api/admin/v1/families`
+- `GET/POST /api/admin/v1/students`
+- `GET/POST /api/admin/v1/teachers`
+- `GET/POST /api/admin/v1/rooms`
+- `GET/POST /api/admin/v1/courses`
+- `POST /api/admin/v1/courses/:id/products`
+- `POST /api/admin/v1/orders`
+- `POST /api/admin/v1/orders/:id/payments`
+- `POST /api/admin/v1/orders/:id/early-activate`
+- `POST /api/admin/v1/orders/:id/refund`
+- `POST /api/admin/v1/lessons`：单次课次，带资源冲突检查
+- `POST /api/admin/v1/lesson-series`：生成未来 12 周固定课次
+- `POST /api/admin/v1/lesson-series/:id/extend`：滚动补充未来课次
+- `POST /api/admin/v1/lessons/:lessonId/students/:studentId/confirm`
+- `POST /api/admin/v1/lessons/:lessonId/students/:studentId/consume`
+
+所有管理 API 使用 `Authorization: Bearer ADMIN_TOKEN`。家长 API 使用微信登录返回的会话 token，并且每次按监护人授权关系检查孩子权限。
+
+旧预约数据只保留给负责人查看。公开预约提交和仅凭手机号查询接口已关闭，历史记录没有删除。
 
 ## 测试
+
 ```bash
 cd backend
 npm test
 ```
+
+GitHub Actions 会在功能分支 push 和 PR 时运行后端测试。
+
+## 当前尚未完成 / 不可直接生产上线
+
+- 管理员正式账号、会话和角色权限；当前管理令牌仅开发使用。
+- 管理后台完整列表、编辑、调课、请假和停课操作体验。
+- 家长端真机验证、订阅消息模板与通知触发。
+- 成长记录的负责人审核/发布管理界面。
+- 课时更正冲正界面、退款操作员身份和凭证附件。
+- 备份恢复自动化、部署配置、HTTPS 与小程序合法域名。
+- 微信真实凭证配置后，必须用实际小程序账号完成登录、手机号授权和家庭绑定验收。
+
+**不要将开发版管理后台或当前分支作为正式生产系统直接对外开放。**
