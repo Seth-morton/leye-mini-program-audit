@@ -361,6 +361,9 @@ function createAdminV1Router(db) {
       const rows=db.prepare(`SELECT l.id,l.status,l.mode,l.starts_at_utc,l.ends_at_utc,
         t.name AS teacher_name,r.name AS room_name,c.name AS course_name,
         ls.student_id,s.name AS student_name,ls.attendance_status,ls.teacher_confirmed,
+        COALESCE((SELECT SUM(et.quantity) FROM entitlement_transactions et
+          WHERE et.lesson_id=l.id AND et.student_id=ls.student_id
+          AND et.transaction_type IN ('consume_paid','consume_bonus')),0) AS consumed_quantity,
         ls.actual_teacher_id,at.name AS actual_teacher_name
         FROM lessons l JOIN teachers t ON t.id=l.teacher_id
         JOIN rooms r ON r.id=l.room_id JOIN courses_catalog c ON c.id=l.course_id
