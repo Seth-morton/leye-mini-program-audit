@@ -80,7 +80,7 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const earlyConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(earlyConfirm.status, 409, '课程尚未结束不得确认实际授课');
 
-  db.prepare("UPDATE lessons SET ends_at_utc='2020-01-01T17:00:00.000Z' WHERE id=?").run(lesson.id);
+  db.prepare("UPDATE lessons SET starts_at_utc='2020-01-01T16:00:00.000Z',ends_at_utc='2020-01-01T17:00:00.000Z' WHERE id=?").run(lesson.id);
   const confirmed = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(confirmed.status, 200, '已结束的正常课次可以确认授课');
   const duplicateConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
@@ -99,7 +99,7 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
     method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'student_leave'})
   });
   assert.equal(markLeave.status,200,'负责人应能记录学员请假');
-  db.prepare("UPDATE lessons SET ends_at_utc='2020-01-02T17:00:00.000Z' WHERE id=?").run(leaveLesson.id);
+  db.prepare("UPDATE lessons SET starts_at_utc='2020-01-02T16:00:00.000Z',ends_at_utc='2020-01-02T17:00:00.000Z' WHERE id=?").run(leaveLesson.id);
   const confirmLeave=await call('/lessons/'+leaveLesson.id+'/students/'+studentB+'/confirm',{});
   assert.equal(confirmLeave.status,409,'请假学员不得被确认为实际授课');
 
