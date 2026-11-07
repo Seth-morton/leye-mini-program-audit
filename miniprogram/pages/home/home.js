@@ -5,8 +5,8 @@ Page({
   onShow(){this.load()},
   load(){
     this.setData({loading:true});
-    loadStudents().then(({students,selectedIndex,selected})=>{
-      this.setData({students,studentIndex:selectedIndex,studentName:selected?.name||'',needsBinding:students.length===0,loading:false,error:''});
+    loadStudents().then(({students,selectedIndex,selected,profile})=>{
+      this.setData({students,studentIndex:selectedIndex,studentName:selected?.name||'',needsBinding:students.length===0,phoneVerified:!!(profile&&profile.phone),loading:false,error:''});
       if(selected)this.loadStudentData(selected.id);
       request('/api/parent/notifications').then(rows=>this.setData({notifications:rows.slice(0,3)})).catch(()=>{});
     }).catch(err=>this.setData({loading:false,needsBinding:true,error:err.message}));
