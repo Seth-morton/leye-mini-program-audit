@@ -65,6 +65,9 @@ npm run dev
 - `POST /api/admin/v1/orders`
 - `POST /api/admin/v1/orders/:id/payments`
 - `POST /api/admin/v1/orders/:id/early-activate`
+- `POST /api/admin/v1/orders/:id/refund`：登记退款审批，冻结剩余权益但不伪记为已退款
+- `POST /api/admin/v1/orders/:id/refund/complete`：线下实际退款完成后登记实际金额与差异原因
+- `GET /api/catalog/courses`：家长端只读课程目录（与旧预约课程表分离）
 - `POST /api/admin/v1/orders/:id/refund`
 - `POST /api/admin/v1/lessons`：单次课次，带资源冲突检查
 - `POST /api/admin/v1/lesson-series`：生成未来 12 周固定课次
@@ -96,3 +99,8 @@ GitHub Actions 会在功能分支 push 和 PR 时运行后端测试。
 - 微信真实凭证配置后，必须用实际小程序账号完成登录、手机号授权和家庭绑定验收。
 
 **不要将开发版管理后台或当前分支作为正式生产系统直接对外开放。**
+
+
+## 需求对照与对抗式验收
+
+完整的角色权限、家长端边界、排课冲突、实际授课、课时账本、订单退款、数据迁移与生产部署验收矩阵见 [`docs/ACCEPTANCE-AND-ADVERSARIAL-TESTS.md`](docs/ACCEPTANCE-AND-ADVERSARIAL-TESTS.md)。该文档明确区分已实现、部分实现与未完成项目；自动测试通过不代表全部业务验收通过。
