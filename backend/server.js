@@ -27,6 +27,9 @@ function requireAdmin(req, res, next) {
 }
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/catalog/courses', (req,res) => {
+  res.json(db.prepare("SELECT id,name,category,mode,description FROM courses_catalog WHERE active=1 ORDER BY id").all());
+});
 app.get('/api/courses', (req, res) => {
   res.json(db.prepare('SELECT id,name,category,description,audience,price_text AS priceText FROM courses WHERE active=1 ORDER BY sort_order,id').all());
 });
