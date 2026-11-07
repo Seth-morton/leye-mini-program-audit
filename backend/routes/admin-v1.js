@@ -308,10 +308,15 @@ function createAdminV1Router(db) {
   router.post('/lessons/:lessonId/students/:studentId/confirm', (req, res) => {
     const lessonId = Number(req.params.lessonId);
     const studentId = Number(req.params.studentId);
+    const lesson = db.prepare('SELECT teacher_id FROM lessons WHERE id=?').get(lessonId);
+    if (!lesson) return res.status(404).json({error:'课次不存在'});
+    const actualTeacherId = Number(req.body?.actualTeacherId || lesson.teacher_id);
+    if (!db.prepare('SELECT id FROM teachers WHERE id=? AND active=1').get(actualTeacherId))
+      return res.status(400).json({error:'实际授课教师不存在或不可用'});
     const result = db.prepare(`UPDATE lesson_students SET attendance_status='present',
-      teacher_confirmed=1,confirmed_at=CURRENT_TIMESTAMP WHERE lesson_id=? AND student_id=?`).run(lessonId,studentId);
+      teacher_confirmed=1,actual_teacher_id=?,confirmed_at=CURRENT_TIMESTAMP WHERE lesson_id=? AND student_id=?`).run(actualTeacherId,lessonId,studentId);
     if (!result.changes) return res.status(404).json({ error: '课次学员记录不存在' });
-    record('lesson.confirmed','lesson_student',lessonId+':'+studentId,{attendanceStatus:'present',teacherConfirmed:true});
+    record('lesson.confirmed','lesson_student',lessonId+':'+studentId,{attendanceStatus:'present',teacherConfirmed:true,actualTeacherId});
     res.json({ ok:true, teacherConfirmed:true });
   });
 
