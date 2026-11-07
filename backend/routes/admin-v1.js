@@ -205,8 +205,10 @@ function createAdminV1Router(db) {
         (endsOn&&endsOn<startsOn)||!['one_to_one','small_group','collective','exam'].includes(mode))
       return res.status(400).json({error:'固定排课参数无效'});
     if(mode==='one_to_one'&&studentIds.length!==1)return res.status(400).json({error:'一对一课程只能安排一名学员'});
-    const refs=db.prepare('SELECT (SELECT COUNT(*) FROM courses_catalog WHERE id=?) AS c,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT COUNT(*) FROM rooms WHERE id=? AND active=1) AS r').get(courseId,teacherId,roomId);
-    if(!refs.c||!refs.t||!refs.r)return res.status(400).json({error:'课程、教师或教室不可用'});
+    const refs=db.prepare('SELECT (SELECT mode FROM courses_catalog WHERE id=? AND active=1) AS courseMode,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT capacity FROM rooms WHERE id=? AND active=1) AS capacity').get(courseId,teacherId,roomId);
+    if(!refs.courseMode||!refs.t||!refs.capacity)return res.status(400).json({error:'课程、教师或教室不可用'});
+    if(refs.courseMode!==mode)return res.status(400).json({error:'排课教学模式必须与课程目录设置一致'});
+    if(studentIds.length>refs.capacity)return res.status(409).json({error:'学员人数（'+studentIds.length+'）超过教室容量（'+refs.capacity+'）'});
     const students=db.prepare(`SELECT COUNT(*) AS n FROM students WHERE id IN (${studentIds.map(()=>'?').join(',')}) AND status='active'`).get(...studentIds).n;
     if(students!==studentIds.length)return res.status(400).json({error:'学员不存在或不可用'});
     try{
@@ -214,7 +216,11 @@ function createAdminV1Router(db) {
         const seriesId=db.prepare(`INSERT INTO lesson_series(student_id,class_name,course_id,teacher_id,room_id,mode,weekday,start_time,duration_minutes,starts_on,ends_on)
           VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(studentIds.length===1?studentIds[0]:null,String(req.body?.className||'').slice(0,80)||null,courseId,teacherId,roomId,mode,weekday,startTime,duration,startsOn,endsOn).lastInsertRowid;
         const series={weekday,start_time:startTime,duration_minutes:duration,teacher_id:teacherId,room_id:roomId,ends_on:endsOn};
-        const occurrences=buildSeriesLessons(series,studentIds,startsOn,12);
+        const today=utcToLocalDate(new Date().toISOString(),TIME_ZONE);
+        const generationStart=startsOn<today?today:startsOn;
+        if(endsOn&&endsOn<generationStart)throw Object.assign(new Error('结束日期早于可生成的未来日期'),{status:400});
+        const occurrences=buildSeriesLessons(series,studentIds,generationStart,12);
+        if(!occurrences.length)throw Object.assign(new Error('当前日期范围内没有可生成的课次'),{status:400});
         const addLesson=db.prepare(`INSERT INTO lessons(series_id,course_id,teacher_id,room_id,mode,starts_at_utc,ends_at_utc,timezone)
           VALUES(?,?,?,?,?,?,?,?)`);
         const addStudent=db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
@@ -286,8 +292,10 @@ function createAdminV1Router(db) {
         !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start) ||
         !['one_to_one','small_group','collective','exam'].includes(mode))
       return res.status(400).json({ error: '课程、教师、教室、学员、时间或教学模式无效' });
-    const exists = db.prepare('SELECT (SELECT COUNT(*) FROM courses_catalog WHERE id=?) AS c,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT COUNT(*) FROM rooms WHERE id=? AND active=1) AS r').get(courseId,teacherId,roomId);
-    if (!exists.c || !exists.t || !exists.r) return res.status(400).json({ error: '课程、教师或教室不存在/不可用' });
+    const exists = db.prepare('SELECT (SELECT mode FROM courses_catalog WHERE id=? AND active=1) AS courseMode,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT capacity FROM rooms WHERE id=? AND active=1) AS capacity').get(courseId,teacherId,roomId);
+    if (!exists.courseMode || !exists.t || !exists.capacity) return res.status(400).json({ error: '课程、教师或教室不存在/不可用' });
+    if (exists.courseMode !== mode) return res.status(400).json({ error: '排课教学模式必须与课程目录设置一致' });
+    if (studentIds.length > exists.capacity) return res.status(409).json({ error: '学员人数（'+studentIds.length+'）超过教室容量（'+exists.capacity+'）' });
     const studentCount = db.prepare(`SELECT COUNT(*) AS n FROM students WHERE id IN (${studentIds.map(() => '?').join(',')}) AND status='active'`).get(...studentIds).n;
     if (studentCount !== studentIds.length) return res.status(400).json({ error: '学员不存在或不可用' });
     if (mode === 'one_to_one' && studentIds.length !== 1) return res.status(400).json({ error: '一对一课程只能安排一名学员' });
@@ -311,8 +319,10 @@ function createAdminV1Router(db) {
   router.post('/lessons/:lessonId/students/:studentId/confirm', (req, res) => {
     const lessonId = Number(req.params.lessonId);
     const studentId = Number(req.params.studentId);
-    const lesson = db.prepare('SELECT teacher_id FROM lessons WHERE id=?').get(lessonId);
+    const lesson = db.prepare('SELECT teacher_id,status,ends_at_utc FROM lessons WHERE id=?').get(lessonId);
     if (!lesson) return res.status(404).json({error:'课次不存在'});
+    if (!['scheduled','rescheduled'].includes(lesson.status)) return res.status(409).json({error:'已取消、归档或完成的课次不能再次确认授课'});
+    if (Date.parse(lesson.ends_at_utc) > Date.now()) return res.status(409).json({error:'课程尚未结束，不能确认实际完成授课'});
     const actualTeacherId = Number(req.body?.actualTeacherId || lesson.teacher_id);
     if (!db.prepare('SELECT id FROM teachers WHERE id=? AND active=1').get(actualTeacherId))
       return res.status(400).json({error:'实际授课教师不存在或不可用'});
@@ -337,9 +347,12 @@ function createAdminV1Router(db) {
         if (!attendance) throw Object.assign(new Error('课次学员记录不存在'),{status:404});
         if (!attendance.teacher_confirmed || attendance.attendance_status !== 'present')
           throw Object.assign(new Error('必须先确认实际完成授课，才能消课'),{status:409});
-        const prior = db.prepare(`SELECT COUNT(*) AS n FROM entitlement_transactions
-          WHERE lesson_id=? AND student_id=? AND transaction_type IN ('consume_paid','consume_bonus')`).get(lessonId,studentId).n;
-        if (prior) throw Object.assign(new Error('该课次已消课，禁止重复操作'),{status:409});
+        const prior = db.prepare(`SELECT COUNT(*) AS n FROM entitlement_transactions c
+          WHERE c.lesson_id=? AND c.student_id=? AND c.transaction_type IN ('consume_paid','consume_bonus')
+          AND NOT EXISTS (SELECT 1 FROM entitlement_transactions r
+            WHERE r.transaction_type='reverse' AND r.reference_transaction_id=c.id
+            GROUP BY r.reference_transaction_id HAVING SUM(r.quantity)>=c.quantity)`).get(lessonId,studentId).n;
+        if (prior) throw Object.assign(new Error('该课次仍存在有效消课流水，禁止重复操作'),{status:409});
         const lots = db.prepare(`SELECT * FROM entitlement_lots WHERE student_id=? AND course_id=?
           AND status='active' AND (expires_on IS NULL OR expires_on>=date('now')) ORDER BY id`).all(studentId,attendance.course_id);
         const { balanceForLot } = require('../domain/ledger');
