@@ -1,23 +1,16 @@
 <view class="page">
-  <van-image
-    custom-class="banner"
-    src="https://images.unsplash.com/photo-1516280440502-863a346513c0?auto=format&fit=crop&w=800&q=80"
-    width="100%"
-    height="200"
-    fit="cover"
-    radius="12"
-  />
-
+  <view class="brand-mark">乐也</view>
+  <view class="brand-en">LEYE MUSIC STUDIO</view>
   <view class="card">
     <view class="card-title">关于乐也</view>
-    <view class="card-body">乐也声乐工作室，致力于为每一位热爱音乐的人提供专业、耐心、有温度的声乐教学。无论是零基础兴趣培养，还是艺考专业冲刺，我们都在这里陪伴你探索声音的无限可能。</view>
+    <view class="card-body">乐也声乐工作室，以声乐教学为核心，提供声乐基础训练、音乐艺考指导与钢琴辅助教学。我们重视专业、责任、细心与持续成长。</view>
   </view>
-
-  <view class="info">
-    <view class="info-row"><text class="info-label">联系电话</text><text class="info-value">138 0000 0000</text></view>
-    <view class="info-row"><text class="info-label">工作室地址</text><text class="info-value">XX 市 XX 区 XX 路 88 号</text></view>
-    <view class="info-row"><text class="info-label">营业时间</text><text class="info-value">10:00 - 21:00</text></view>
+  <view class="card">
+    <view class="card-title">教学服务</view>
+    <view class="service-row"><text>声乐教学</text><text>核心课程</text></view>
+    <view class="service-row"><text>音乐艺考指导</text><text>专业训练</text></view>
+    <view class="service-row"><text>钢琴辅助</text><text>配套学习</text></view>
   </view>
-
-  <view class="footer">乐也声乐工作室 · MVP v2</view>
+  <view class="contact-note">课程安排、续费及工作室联系方式，请直接向乐也工作室负责人咨询。</view>
+  <view class="footer">乐也声乐工作室</view>
 </view>
