@@ -1,0 +1,15 @@
+<view class="page">
+  <view class="hero">
+    <view class="eyebrow">LEYE MUSIC STUDIO</view>
+    <view class="hero-title">让每一份声音，<br/>都被认真听见。</view>
+    <view class="hero-sub">专业声乐教学 · 艺考指导 · 钢琴辅助</view>
+    <van-button type="primary" block round custom-class="hero-btn" bind:click="goBooking">预约试听</van-button>
+  </view>
+  <view class="row section"><view>探索课程</view><view class="more" bindtap="goCourses">全部课程 ›</view></view>
+  <view class="grid">
+    <view class="course-card" wx:for="{{courses}}" wx:key="id" bindtap="goCourses">
+      <view class="course-icon">♫</view><view class="course-name">{{item.name}}</view><view class="muted">{{item.description}}</view>
+    </view>
+  </view>
+  <view class="card about"><view class="section">认识乐也</view><view class="muted">以专业、耐心与艺术审美，陪伴每一位学员探索声音的可能。</view></view>
+</view>

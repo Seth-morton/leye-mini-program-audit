@@ -1,0 +1,4 @@
+.intro{margin:12rpx 0 28rpx}.course-title{font-size:32rpx;font-weight:700}.desc{margin:20rpx 0;line-height:1.6}.price{font-weight:600;color:#52677A}
+.card{border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.card .muted{color:#8E8E93}
+.small-btn{margin-top:20rpx;background:#172433;color:#fff;font-size:26rpx}

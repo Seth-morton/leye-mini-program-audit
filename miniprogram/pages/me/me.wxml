@@ -1,0 +1,17 @@
+<view class="page">
+  <view class="profile">
+    <view class="avatar">乐</view>
+    <view class="profile-info">
+      <view class="profile-name">乐也访客</view>
+      <view class="profile-sub">未登录 · 演示账号</view>
+    </view>
+  </view>
+
+  <van-cell-group inset custom-class="menu-group">
+    <van-cell title="我的预约" is-link icon="orders-o" bind:click="goToBookings" />
+    <van-cell title="联系客服" is-link icon="service-o" bind:click="contactService" />
+    <van-cell title="关于乐也" is-link icon="info-o" bind:click="goToAbout" />
+  </van-cell-group>
+
+  <view class="footer">乐也声乐工作室 · MVP v2</view>
+</view>

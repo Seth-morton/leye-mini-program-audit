@@ -1,0 +1,9 @@
+<view class="page">
+  <view class="title">课程中心</view><view class="muted intro">找到适合自己的学习方向</view>
+  <view class="card" wx:for="{{courses}}" wx:key="id">
+    <view class="row"><view class="course-title">{{item.name}}</view><view class="pill">{{item.category}}</view></view>
+    <view class="muted desc">{{item.description}}</view>
+    <view class="row"><view class="muted">{{item.audience}}</view><view class="price">{{item.priceText}}</view></view>
+    <button class="small-btn" data-id="{{item.id}}" bindtap="bookCourse">预约咨询</button>
+  </view>
+</view>

@@ -1,0 +1,8 @@
+page{background:#f2f2f7}
+.page{padding:24rpx 0 60rpx}
+.title,.intro{padding:0 32rpx}
+.intro{margin-top:12rpx}
+.form-group{margin-top:24rpx;border-radius:14px;overflow:hidden}
+.submit-wrap{padding:48rpx 32rpx 0}
+.submit-btn{box-shadow:0 6px 18px rgba(0,122,255,0.28)}
+.privacy{padding:24rpx 32rpx 0;line-height:1.6;text-align:center}

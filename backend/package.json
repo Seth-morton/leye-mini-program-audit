@@ -1,0 +1,19 @@
+{
+  "name": "leye-mini-program-backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "乐也声乐工作室小程序 MVP backend",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0"
+  }
+}

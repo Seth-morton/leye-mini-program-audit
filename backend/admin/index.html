@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>乐也 · 预约管理</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f7f5f0;color:#172433;font:15px system-ui,-apple-system,sans-serif}
+header{background:#172433;color:#fff;padding:22px max(20px,calc((100% - 1000px)/2));}
+main{max-width:1000px;margin:24px auto;padding:0 18px}.panel{background:white;border-radius:14px;padding:18px;margin-bottom:18px}
+input,select,button{font:inherit;padding:10px 12px;border:1px solid #d8dde1;border-radius:8px}
+button{cursor:pointer;background:#172433;color:#fff;border:0}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #eee;vertical-align:top}th{color:#687681;font-size:13px}
+small{color:#687681}.status{display:inline-block;border-radius:20px;padding:4px 8px;background:#eef1f3;font-size:12px}
+@media(max-width:700px){table,tbody,tr,td{display:block}thead{display:none}td{border:0;padding:5px 0}tr{border-bottom:1px solid #eee;padding:12px 0}}
+</style>
+</head>
+<body>
+<header><strong>乐也 · 预约管理</strong><div><small style="color:#d5dce3">工作室内部管理工具（开发版）</small></div></header>
+<main>
+<section class="panel">
+<h3>管理员验证</h3>
+<div class="row"><input id="token" type="password" placeholder="输入 ADMIN_TOKEN" autocomplete="off"><button id="load">加载预约</button><select id="filter"><option value="">全部状态</option><option value="pending">待确认</option><option value="confirmed">已确认</option><option value="declined">已拒绝</option><option value="completed">已完成</option></select></div>
+<p id="message"><small>令牌仅保存在当前页面内存中，不会写入小程序。</small></p>
+</section>
+<section class="panel"><h3>预约列表</h3><div id="list"><small>验证后加载预约。</small></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id); let rows=[];
+const labels={pending:'待确认',confirmed:'已确认',declined:'已拒绝',completed:'已完成'};
+function auth(){return 'Bearer '+$('token').value.trim()}
+async function api(url,options={}){const r=await fetch(url,{...options,headers:{'Content-Type':'application/json','Authorization':auth(),...(options.headers||{})}});const d=await r.json();if(!r.ok)throw Error(d.error||'请求失败');return d}
+function render(){if(!rows.length){$('list').innerHTML='<small>暂无预约记录。</small>';return}
+$('list').innerHTML='<table><thead><tr><th>学员 / 联系方式</th><th>课程 / 意向时间</th><th>备注</th><th>提交时间</th><th>状态</th><th>操作</th></tr></thead><tbody>'+rows.map(x=>`<tr><td><strong>${esc(x.studentName)}</strong><br><small>${esc(x.guardianName||'')} ${esc(x.phone)}</small></td><td>${esc(x.courseName)}<br><small>${esc(x.preferredDate||'未指定')} ${esc(x.preferredTime||'')}</small></td><td>${esc(x.note||'—')}</td><td><small>${esc(x.createdAt||'—')}</small></td><td><span class="status">${labels[x.status]||x.status}</span></td><td><select data-status="${x.id}">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${x.status===k?'selected':''}>${v}</option>`).join('')}</select><button data-save="${x.id}">保存</button></td></tr>`).join('')+'</tbody></table>';
+document.querySelectorAll('[data-save]').forEach(b=>b.onclick=async()=>{const id=b.dataset.save;const status=document.querySelector(`[data-status="${id}"]`).value;try{await api('/api/admin/bookings/'+id,{method:'PATCH',body:JSON.stringify({status})});$('message').textContent='已更新预约 #'+id;await load()}catch(e){$('message').textContent=e.message}});
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function load(){try{rows=await api('/api/admin/bookings'+($('filter').value?'?status='+$('filter').value:''));render();$('message').textContent='已加载 '+rows.length+' 条预约'}catch(e){$('message').textContent=e.message}}
+$('load').onclick=load;$('filter').onchange=load;
+</script>
+</body></html>

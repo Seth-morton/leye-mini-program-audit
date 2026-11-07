@@ -1,0 +1,8 @@
+page{background:#f2f2f7}
+.page{min-height:100vh;padding:24rpx 0 calc(60rpx + env(safe-area-inset-bottom))}
+.loading{display:block;margin:160rpx auto}
+.list-group{margin-top:8rpx;border-radius:14px;overflow:hidden}
+.item{padding:4rpx 0}
+.item-head{display:flex;align-items:center;gap:12rpx}
+.course{font-size:30rpx;font-weight:600;color:#172433}
+.line{font-size:24rpx;color:#8E8E93;margin-top:8rpx}

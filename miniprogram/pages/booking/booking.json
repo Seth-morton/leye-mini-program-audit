@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "预约试听",
+  "usingComponents": {
+    "van-cell-group": "@vant/weapp/cell-group/index",
+    "van-field": "@vant/weapp/field/index",
+    "van-button": "@vant/weapp/button/index"
+  }
+}

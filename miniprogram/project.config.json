@@ -1,0 +1,29 @@
+{
+  "description": "乐也声乐工作室小程序",
+  "compileType": "miniprogram",
+  "libVersion": "3.17.5",
+  "appid": "wx910f25ac466f773b",
+  "projectname": "leye-mini-program",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "condition": false
+  },
+  "condition": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
+}

@@ -1,0 +1,8 @@
+page{background:#f2f2f7}
+.page{padding-bottom:calc(80rpx + env(safe-area-inset-bottom))}
+.profile{display:flex;align-items:center;gap:24rpx;padding:48rpx 32rpx 40rpx}
+.avatar{width:112rpx;height:112rpx;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:44rpx;box-shadow:0 6px 16px rgba(0,122,255,0.28)}
+.profile-name{font-size:36rpx;font-weight:600;color:#172433}
+.profile-sub{font-size:24rpx;color:#8E8E93;margin-top:8rpx}
+.menu-group{margin-top:8rpx;border-radius:14px;overflow:hidden}
+.footer{text-align:center;padding:56rpx 32rpx 0;font-size:22rpx;color:#C7C7CC;letter-spacing:1rpx}

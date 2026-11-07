@@ -1,0 +1,11 @@
+page{background:#F7F5F0;color:#172433;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:28rpx;
+  --button-primary-background-color:#007aff;
+  --button-primary-border-color:#007aff;
+  --border-radius-md:10px;
+  --border-radius-lg:14px;
+  --page-background-color:#f2f2f7;
+}
+.page{padding:32rpx}.card{background:#fff;border-radius:20rpx;padding:28rpx;margin-bottom:24rpx}
+.title{font-size:40rpx;font-weight:600}.muted{color:#7A838B;font-size:24rpx}
+.section{font-size:32rpx;font-weight:600;margin:28rpx 0 20rpx}.row{display:flex;align-items:center;justify-content:space-between}
+.pill{background:#E8EDF0;color:#52677A;padding:8rpx 16rpx;border-radius:30rpx;font-size:22rpx}

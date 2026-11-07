@@ -1,0 +1,10 @@
+.page{padding-bottom:calc(100rpx + env(safe-area-inset-bottom))}
+.hero{background:#172433;color:#fff;border-radius:24px;padding:40rpx 32rpx;margin-bottom:16px;box-shadow:0 8px 24px rgba(23,36,51,.18)}
+.eyebrow{font-size:20rpx;letter-spacing:4rpx;color:#C6D0D8}.hero-title{font-size:48rpx;line-height:1.5;font-weight:600;margin:24rpx 0}
+.hero-sub{font-size:24rpx;color:#D5DCE3}
+.hero-btn{margin:32rpx 0 8rpx;box-shadow:0 4px 14px rgba(0,122,255,0.3)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20rpx}
+.course-card{background:#fff;border-radius:16px;padding:26rpx;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
+.course-icon{font-size:44rpx;color:#52677A}.course-name{font-weight:700;margin:16rpx 0}
+.course-card .muted{color:#8E8E93}
+.more{font-size:24rpx;color:#687681}.about{margin-top:28rpx}

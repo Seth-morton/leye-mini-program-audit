@@ -1,0 +1,12 @@
+page{background:#f2f2f7}
+.page{padding:24rpx 0 calc(60rpx + env(safe-area-inset-bottom))}
+.banner{display:block;margin:0 32rpx;border-radius:24rpx;overflow:hidden;box-shadow:0 8px 24px rgba(23,36,51,0.12)}
+.card{background:#fff;border-radius:20rpx;margin:24rpx 32rpx 0;padding:32rpx}
+.card-title{font-size:36rpx;font-weight:600;color:#172433}
+.card-body{margin-top:16rpx;font-size:26rpx;line-height:1.8;color:#52606C}
+.info{background:#fff;border-radius:20rpx;margin:24rpx 32rpx 0;padding:8rpx 32rpx}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:26rpx 0;border-bottom:1rpx solid #F2F2F7}
+.info-row:last-child{border-bottom:0}
+.info-label{font-size:28rpx;color:#172433}
+.info-value{font-size:26rpx;color:#8E8E93}
+.footer{text-align:center;padding:48rpx 32rpx 0;font-size:22rpx;color:#C7C7CC}

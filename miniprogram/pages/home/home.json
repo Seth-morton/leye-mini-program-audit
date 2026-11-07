@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "乐也 · 声乐艺术",
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-card": "@vant/weapp/card/index"
+  }
+}
