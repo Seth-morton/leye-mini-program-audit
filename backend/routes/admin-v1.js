@@ -130,9 +130,9 @@ function createAdminV1Router(db) {
           .run(phone, displayName, 'guardian').lastInsertRowid;
         user = { id };
       }
-      const result = db.prepare(`INSERT INTO family_members(family_id,user_id,relationship,status)
-        VALUES(?,?,?,'pending') ON CONFLICT(family_id,user_id) DO UPDATE SET status='pending'`)
-        .run(familyId, user.id, String(req.body?.relationship || 'guardian').slice(0, 30));
+      const result = db.prepare(`INSERT INTO family_members(family_id,user_id,relationship,can_view_schedule,can_view_finance,can_view_growth,status)
+        VALUES(?,?,?,?,?,?,'pending') ON CONFLICT(family_id,user_id) DO UPDATE SET status='pending',can_view_schedule=excluded.can_view_schedule,can_view_finance=excluded.can_view_finance,can_view_growth=excluded.can_view_growth`)
+        .run(familyId, user.id, String(req.body?.relationship || 'guardian').slice(0, 30), req.body?.canViewSchedule === false ? 0 : 1, req.body?.canViewFinance === false ? 0 : 1, req.body?.canViewGrowth === false ? 0 : 1);
       return { userId: user.id, membershipId: result.lastInsertRowid };
     });
     const result = create();
@@ -145,8 +145,9 @@ function createAdminV1Router(db) {
     const member = db.prepare('SELECT id,family_id,user_id FROM family_members WHERE id=? AND status=?').get(id, 'pending');
     if (!member) return res.status(404).json({ error: '待审核关联不存在' });
     db.prepare(`UPDATE family_members SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
-    db.prepare(`INSERT OR IGNORE INTO student_guardians(student_id,user_id,status)
-      SELECT id,?,'approved' FROM students WHERE family_id=?`).run(member.user_id, member.family_id);
+    db.prepare(`INSERT OR IGNORE INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth)
+      SELECT s.id,fm.user_id,'approved',fm.can_view_schedule,fm.can_view_finance,fm.can_view_growth
+      FROM students s JOIN family_members fm ON fm.family_id=s.family_id WHERE fm.id=?`).run(id);
     record('guardian.binding_approved', 'family_member', id, { familyId: member.family_id, userId: member.user_id });
     res.json({ ok: true });
   });
