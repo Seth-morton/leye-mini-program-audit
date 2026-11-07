@@ -68,6 +68,9 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   assert.equal(refund.status, 'approved', '审批退款不能伪记为线下退款已到账');
   assert.equal(refund.actual_refunded_cents, 0);
   assert.equal(refund.refunded_at, null);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(orderId).status, 'paid', '线下实际退款前订单不能提前标记为已退款');
+  const blockedPayment = await call('/orders/' + orderId + '/payments', { amountCents: 100, method: 'cash' });
+  assert.equal(blockedPayment.status, 409, '退款处理中不能继续收款');
 
   const completed = await call('/orders/' + orderId + '/refund/complete', {
     actualRefundedCents: 9000, adjustmentReason: '线下实际退回金额少于批准金额'
@@ -76,4 +79,5 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const paidRefund = db.prepare('SELECT status,actual_refunded_cents FROM refunds WHERE order_id=?').get(orderId);
   assert.equal(paidRefund.status, 'paid');
   assert.equal(paidRefund.actual_refunded_cents, 9000);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(orderId).status, 'refunded');
 });
