@@ -33,6 +33,11 @@ function utcToLocalDate(utc, timeZone = TIME_ZONE) {
   return [p.year,p.month,p.day].join('-');
 }
 
+function utcToLocalDateTime(utc, timeZone = TIME_ZONE) {
+  const p = partsAt(new Date(utc),timeZone);
+  return [p.year,p.month,p.day].join('-')+' '+p.hour+':'+p.minute;
+}
+
 function addLocalDays(dateText, days) {
   const [y,m,d] = dateText.split('-').map(Number);
   const date = new Date(Date.UTC(y,m-1,d+days));
@@ -44,4 +49,4 @@ function weekdayOf(dateText) {
   return new Date(Date.UTC(y,m-1,d)).getUTCDay();
 }
 
-module.exports = { TIME_ZONE, localToUtc, utcToLocalDate, addLocalDays, weekdayOf };
+module.exports = { TIME_ZONE, localToUtc, utcToLocalDate, utcToLocalDateTime, addLocalDays, weekdayOf };
