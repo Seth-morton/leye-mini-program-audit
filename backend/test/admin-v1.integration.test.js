@@ -116,6 +116,33 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const stopConsume=await call('/lessons/'+cancelledLesson.id+'/students/'+studentA+'/consume',{quantity:1});
   assert.equal(stopConsume.status,409,'工作室停课不得消课');
 
+  const growthLessonResponse=await call('/lessons',{
+    courseId,teacherId,roomId,studentIds:[studentB],mode:'small_group',
+    startsAtUtc:'2030-01-04T16:00:00.000Z',endsAtUtc:'2030-01-04T17:00:00.000Z'
+  });
+  assert.equal(growthLessonResponse.status,201);
+  const growthLesson=await growthLessonResponse.json();
+  const draftBeforeTeaching=await call('/lessons/'+growthLesson.id+'/students/'+studentB+'/growth-notes',{
+    internalNote:'课堂内部观察',parentSummary:'今天表现很好',practiceTasks:'每天练习十分钟'
+  });
+  assert.equal(draftBeforeTeaching.status,409,'未确认实际授课不得创建成长记录');
+  db.prepare("UPDATE lessons SET starts_at_utc='2020-01-04T16:00:00.000Z',ends_at_utc='2020-01-04T17:00:00.000Z' WHERE id=?").run(growthLesson.id);
+  const confirmGrowthLesson=await call('/lessons/'+growthLesson.id+'/students/'+studentB+'/confirm',{});
+  assert.equal(confirmGrowthLesson.status,200);
+  const draftNote=await call('/lessons/'+growthLesson.id+'/students/'+studentB+'/growth-notes',{
+    internalNote:'课堂内部观察',parentSummary:'今天表现很好',practiceTasks:'每天练习十分钟'
+  });
+  assert.equal(draftNote.status,201,'确认实际授课后可以创建成长记录草稿');
+  const note=await draftNote.json();
+  const parentCannotSeeDraft=await fetch(base+'/growth-notes');
+  assert.equal(parentCannotSeeDraft.status,401,'管理端成长记录接口不得匿名访问');
+  const published=await call('/growth-notes/'+note.id+'/publish',{});
+  assert.equal(published.status,200,'负责人发布成长记录应成功');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='growth_note_published'").get(guardianB).n,1,'只向有成长权限的监护人发送通知');
+  const duplicatePublish=await call('/growth-notes/'+note.id+'/publish',{});
+  assert.equal(duplicatePublish.status,409,'已发布成长记录不能重复发布');
+  assert.equal(db.prepare("SELECT status FROM lesson_notes WHERE id=?").get(note.id).status,'published');
+
   const orderId = db.prepare("INSERT INTO orders(student_id,status,total_cents,received_cents) VALUES(?,'paid',10000,10000)").run(studentA).lastInsertRowid;
   db.prepare("INSERT INTO order_items(order_id,course_id,product_name_snapshot,price_cents,paid_lessons,bonus_lessons) VALUES(?,?,?,?,?,?)")
     .run(orderId, courseId, '10节声乐课', 10000, 10, 0);
