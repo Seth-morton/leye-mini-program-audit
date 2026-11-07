@@ -46,10 +46,27 @@ const $=id=>document.getElementById(id);
 function base(){return $('api').value.trim().replace(/\/$/,'')||location.origin}
 function show(x){$('output').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
 async function api(path,method='GET',body){const r=await fetch(base()+path,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+$('token').value.trim()},body:body?JSON.stringify(body):undefined});const data=await r.json();if(!r.ok)throw Error(data.error||'请求失败');return data}
-function data(form){const o={};new FormData(form).forEach((v,k)=>{if(v!=='')o[k]=v});for(const k of Object.keys(o)){if(['familyId','studentId','productId','courseId','priceCents','paidLessons','bonusLessons','validityDays','capacity','orderId','amountCents','approvedCents'].includes(k))o[k]=Number(o[k])}return o}
+function data(form){const o={};new FormData(form).forEach((v,k)=>{if(v!=='')o[k]=v});for(const k of Object.keys(o)){if(['familyId','studentId','productId','courseId','priceCents','paidLessons','bonusLessons','validityDays','capacity','orderId','amountCents','approvedCents','actualRefundedCents','teacherId','roomId','lessonId','membershipId','seriesId','quantity'].includes(k))o[k]=Number(o[k])}return o}
 document.querySelectorAll('form[data-path]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();try{show(await api(form.dataset.path,'POST',data(form)));form.reset()}catch(err){show(err.message)}}));
-for(const [id,path] of [['productForm',null],['paymentForm',null],['activateForm',null],['refundForm',null]])
-$('refundCompleteForm').addEventListener('submit',async e=>{e.preventDefault();try{const v=data(e.currentTarget);const orderId=v.orderId;delete v.orderId;show(await api('/api/admin/v1/orders/'+orderId+'/refund/complete','POST',v));e.currentTarget.reset()}catch(err){show(err.message)}});$(id).addEventListener('submit',async e=>{e.preventDefault();try{const v=data(e.currentTarget);let result;if(id==='productForm'){const courseId=v.courseId;delete v.courseId;result=await api('/api/admin/v1/courses/'+courseId+'/products','POST',v)}else if(id==='paymentForm'){const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/payments','POST',v)}else if(id==='activateForm'){const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/early-activate','POST',v)}else{const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/refund','POST',v)}show(result);e.currentTarget.reset()}catch(err){show(err.message)}});
+for(const [id] of [['productForm'],['paymentForm'],['activateForm'],['refundForm']]) {
+  $(id).addEventListener('submit',async e=>{
+    e.preventDefault();
+    try {
+      const v=data(e.currentTarget);
+      let result;
+      if(id==='productForm'){const courseId=v.courseId;delete v.courseId;result=await api('/api/admin/v1/courses/'+courseId+'/products','POST',v)}
+      else {const orderId=v.orderId;delete v.orderId;const route=id==='paymentForm'?'payments':id==='activateForm'?'early-activate':'refund';result=await api('/api/admin/v1/orders/'+orderId+'/'+route,'POST',v)}
+      show(result);e.currentTarget.reset();
+    } catch(err) {show(err.message)}
+  });
+}
+$('refundCompleteForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try {
+    const v=data(e.currentTarget);const orderId=v.orderId;delete v.orderId;
+    show(await api('/api/admin/v1/orders/'+orderId+'/refund/complete','POST',v));e.currentTarget.reset();
+  } catch(err) {show(err.message)}
+});
 
 function toChicagoUtc(value){const target=Date.parse(value+':00Z');if(!Number.isFinite(target))throw Error('课程时间无效');let guess=target;const fmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});for(let i=0;i<5;i++){const p=Object.fromEntries(fmt.formatToParts(new Date(guess)).map(x=>[x.type,x.value]));const wall=Date.UTC(Number(p.year),Number(p.month)-1,Number(p.day),Number(p.hour),Number(p.minute),Number(p.second));const delta=target-wall;if(!delta)break;guess+=delta;}const p=Object.fromEntries(fmt.formatToParts(new Date(guess)).map(x=>[x.type,x.value]));if(Number(p.year)!==Number(value.slice(0,4))||Number(p.month)!==Number(value.slice(5,7))||Number(p.day)!==Number(value.slice(8,10))||Number(p.hour)!==Number(value.slice(11,13))||Number(p.minute)!==Number(value.slice(14,16)))throw Error('该时间在芝加哥时区因夏令时切换而不存在，请选择其他时间');return new Date(guess).toISOString()}
 $('lessonForm').addEventListener('submit',async e=>{e.preventDefault();try{const v=data(e.currentTarget);const studentIds=String(v.studentIds).split(',').map(x=>Number(x.trim())).filter(Number.isInteger);const payload={courseId:v.courseId,teacherId:v.teacherId,roomId:v.roomId,studentIds,mode:v.mode,startsAtUtc:toChicagoUtc(v.startsAtUtc),endsAtUtc:toChicagoUtc(v.endsAtUtc)};show(await api('/api/admin/v1/lessons','POST',payload));}catch(err){show(err.message)}});
