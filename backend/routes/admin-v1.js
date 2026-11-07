@@ -136,7 +136,7 @@ function createAdminV1Router(db) {
     const familyId = Number(req.params.id);
     const phone = String(req.body?.phone || '').trim();
     const displayName = String(req.body?.displayName || '').trim().slice(0, 80);
-    if (!/^\\+?[0-9 -]{7,20}$/.test(phone)) return res.status(400).json({ error: '家长手机号格式无效' });
+    if (!/^\+?[0-9 -]{7,20}$/.test(phone)) return res.status(400).json({ error: '家长手机号格式无效' });
     const family = db.prepare('SELECT id FROM families WHERE id=?').get(familyId);
     if (!family) return res.status(404).json({ error: '家庭不存在' });
     const create = db.transaction(() => {
@@ -197,8 +197,8 @@ function createAdminV1Router(db) {
     const startsOn=String(req.body?.startsOn||''),endsOn=req.body?.endsOn?String(req.body.endsOn):null,mode=req.body?.mode;
     if (![courseId,teacherId,roomId].every(x=>Number.isInteger(x)&&x>0)||!studentIds.length||
         studentIds.some(x=>!Number.isInteger(x)||x<1)||!Number.isInteger(weekday)||weekday<0||weekday>6||
-        !Number.isInteger(duration)||duration<10||duration>360||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime)||
-        !/^\\d{4}-\\d{2}-\\d{2}$/.test(startsOn)||(endsOn&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(endsOn))||
+        !Number.isInteger(duration)||duration<10||duration>360||!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)||
+        !/^\d{4}-\d{2}-\d{2}$/.test(startsOn)||(endsOn&&!/^\d{4}-\d{2}-\d{2}$/.test(endsOn))||
         (endsOn&&endsOn<startsOn)||!['one_to_one','small_group','collective','exam'].includes(mode))
       return res.status(400).json({error:'固定排课参数无效'});
     if(mode==='one_to_one'&&studentIds.length!==1)return res.status(400).json({error:'一对一课程只能安排一名学员'});
