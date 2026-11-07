@@ -5,7 +5,7 @@ function balanceForLot(rows) {
   return rows.reduce((balance, row) => {
     if (GRANT_TYPES.has(row.transaction_type)) balance[row.transaction_type === 'grant_paid' ? 'paid' : 'bonus'] += row.quantity;
     if (CONSUME_TYPES.has(row.transaction_type)) balance[row.transaction_type === 'consume_paid' ? 'paid' : 'bonus'] -= row.quantity;
-    if (row.transaction_type === 'refund_cancel') balance[row.reference_bucket === 'bonus' ? 'bonus' : 'paid'] -= row.quantity;
+    if (row.transaction_type === 'refund_cancel') balance[row.bucket === 'bonus' ? 'bonus' : 'paid'] -= row.quantity;
     if (row.transaction_type === 'reverse') {
       const target = rows.find(item => item.id === row.reference_transaction_id);
       if (target && CONSUME_TYPES.has(target.transaction_type)) balance[target.transaction_type === 'consume_paid' ? 'paid' : 'bonus'] += row.quantity;
