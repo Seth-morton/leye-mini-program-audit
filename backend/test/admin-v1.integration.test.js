@@ -89,6 +89,33 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const cancelledConsume = await call('/lessons/' + lesson.id + '/students/' + studentA + '/consume', { quantity: 1 });
   assert.equal(cancelledConsume.status, 409, '已取消课次即使存在确认标记也不得消课');
 
+  const leaveLessonResponse=await call('/lessons',{
+    courseId,teacherId,roomId,studentIds:[studentB],mode:'small_group',
+    startsAtUtc:'2030-01-02T16:00:00.000Z',endsAtUtc:'2030-01-02T17:00:00.000Z'
+  });
+  assert.equal(leaveLessonResponse.status,201);
+  const leaveLesson=await leaveLessonResponse.json();
+  const markLeave=await fetch(base+'/lessons/'+leaveLesson.id+'/students/'+studentB+'/attendance',{
+    method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'student_leave'})
+  });
+  assert.equal(markLeave.status,200,'负责人应能记录学员请假');
+  db.prepare("UPDATE lessons SET ends_at_utc='2020-01-02T17:00:00.000Z' WHERE id=?").run(leaveLesson.id);
+  const confirmLeave=await call('/lessons/'+leaveLesson.id+'/students/'+studentB+'/confirm',{});
+  assert.equal(confirmLeave.status,409,'请假学员不得被确认为实际授课');
+
+  const cancelledLessonResponse=await call('/lessons',{
+    courseId,teacherId,roomId,studentIds:[studentA],mode:'small_group',
+    startsAtUtc:'2030-01-03T16:00:00.000Z',endsAtUtc:'2030-01-03T17:00:00.000Z'
+  });
+  assert.equal(cancelledLessonResponse.status,201);
+  const cancelledLesson=await cancelledLessonResponse.json();
+  const stopLesson=await fetch(base+'/lessons/'+cancelledLesson.id+'/status',{
+    method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'studio_cancelled',reason:'工作室临时停课'})
+  });
+  assert.equal(stopLesson.status,200,'负责人应能记录工作室停课');
+  const stopConsume=await call('/lessons/'+cancelledLesson.id+'/students/'+studentA+'/consume',{quantity:1});
+  assert.equal(stopConsume.status,409,'工作室停课不得消课');
+
   const orderId = db.prepare("INSERT INTO orders(student_id,status,total_cents,received_cents) VALUES(?,'paid',10000,10000)").run(studentA).lastInsertRowid;
   db.prepare("INSERT INTO order_items(order_id,course_id,product_name_snapshot,price_cents,paid_lessons,bonus_lessons) VALUES(?,?,?,?,?,?)")
     .run(orderId, courseId, '10节声乐课', 10000, 10, 0);
