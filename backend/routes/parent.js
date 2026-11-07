@@ -4,10 +4,6 @@ const { balanceForLot } = require('../domain/ledger');
 function createParentRouter(db) {
   const router = express.Router();
 
-  function allowed(studentId, permission) {
-    return db.prepare(`SELECT 1 FROM student_guardians WHERE student_id=? AND user_id=?
-      AND status='approved' AND ${permission}=1 LIMIT 1`).get(Number(studentId), thisUserId);
-  }
   router.use((req,res,next)=>{ req.parentUserId=req.user.id; next(); });
 
   function requireStudent(req,res,permission) {
