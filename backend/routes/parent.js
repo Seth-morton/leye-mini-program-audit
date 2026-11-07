@@ -1,5 +1,6 @@
 const express = require('express');
 const { balanceForLot } = require('../domain/ledger');
+const { utcToLocalDateTime } = require('../domain/time');
 
 function createParentRouter(db) {
   const router = express.Router();
@@ -34,7 +35,7 @@ function createParentRouter(db) {
       FROM lesson_students ls JOIN lessons l ON l.id=ls.lesson_id
       JOIN courses_catalog c ON c.id=l.course_id JOIN teachers t ON t.id=l.teacher_id JOIN rooms r ON r.id=l.room_id
       WHERE ls.student_id=? AND l.starts_at_utc>=? AND l.starts_at_utc<? ORDER BY l.starts_at_utc`).all(student.id,from,to);
-    res.json(rows);
+    res.json(rows.map(row=>({...row,startsAtLocal:utcToLocalDateTime(row.startsAtUtc),endsAtLocal:utcToLocalDateTime(row.endsAtUtc)})));
   });
 
   router.get('/students/:studentId/entitlements',(req,res)=>{
