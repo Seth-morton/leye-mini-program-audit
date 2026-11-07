@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
+const { runMigrations } = require('./migrate');
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'data', 'leye.sqlite');
 fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_status_created ON bookings(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_phone_created ON bookings(phone, created_at);
 `);
+
+runMigrations(db);
 
 const n = db.prepare('SELECT COUNT(*) AS n FROM courses').get().n;
 if (n === 0) {
