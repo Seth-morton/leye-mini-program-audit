@@ -54,6 +54,16 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   });
   assert.equal(scheduled.status, 201);
   const lesson = await scheduled.json();
+  const overlap = await call('/lessons', {
+    courseId, teacherId, roomId, studentIds: [studentA], mode: 'small_group',
+    startsAtUtc: '2030-01-01T16:30:00.000Z', endsAtUtc: '2030-01-01T17:30:00.000Z'
+  });
+  assert.equal(overlap.status, 409, '教师、教室或学员时间重叠时必须拒绝排课');
+  const dayResponse = await fetch(base + '/lessons/day?date=2030-01-01');
+  assert.equal(dayResponse.status, 200);
+  const dayData = await dayResponse.json();
+  assert.equal(dayData.timezone, 'America/Chicago');
+  assert.ok(dayData.lessons.some(x => x.id === lesson.id), '每日工作台必须按芝加哥本地日期列出课次');
   const earlyConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(earlyConfirm.status, 409, '课程尚未结束不得确认实际授课');
 
