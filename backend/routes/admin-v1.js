@@ -353,8 +353,9 @@ function createAdminV1Router(db) {
             WHERE r.transaction_type='reverse' AND r.reference_transaction_id=c.id
             GROUP BY r.reference_transaction_id HAVING SUM(r.quantity)>=c.quantity)`).get(lessonId,studentId).n;
         if (prior) throw Object.assign(new Error('该课次仍存在有效消课流水，禁止重复操作'),{status:409});
+        const localToday=utcToLocalDate(new Date().toISOString(),TIME_ZONE);
         const lots = db.prepare(`SELECT * FROM entitlement_lots WHERE student_id=? AND course_id=?
-          AND status='active' AND (expires_on IS NULL OR expires_on>=date('now')) ORDER BY id`).all(studentId,attendance.course_id);
+          AND status='active' AND (expires_on IS NULL OR expires_on>=?) ORDER BY id`).all(studentId,attendance.course_id,localToday);
         const { balanceForLot } = require('../domain/ledger');
         const entries = lots.map(lot => {
           const rows = db.prepare('SELECT * FROM entitlement_transactions WHERE lot_id=? ORDER BY id').all(lot.id);
@@ -392,10 +393,11 @@ function createAdminV1Router(db) {
     if (order.early_activation && db.prepare('SELECT COUNT(*) AS n FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').get(orderId).n) return;
     const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(orderId);
     for (const item of items) {
-      const expiry = item.validity_days ? addLocalDays(utcToLocalDate(new Date().toISOString(),TIME_ZONE),item.validity_days) : null;
+      const startsOn = utcToLocalDate(new Date().toISOString(),TIME_ZONE);
+      const expiry = item.validity_days ? addLocalDays(startsOn,item.validity_days) : null;
       const lotId = db.prepare(`INSERT INTO entitlement_lots
         (student_id,order_item_id,course_id,paid_lessons,bonus_lessons,starts_on,expires_on)
-        VALUES(?,?,?,?,?,date('now'),?)`).run(order.student_id,item.id,item.course_id,item.paid_lessons,item.bonus_lessons,expiry).lastInsertRowid;
+        VALUES(?,?,?,?,?,?,?)`).run(order.student_id,item.id,item.course_id,item.paid_lessons,item.bonus_lessons,startsOn,expiry).lastInsertRowid;
       const grant = db.prepare(`INSERT INTO entitlement_transactions
         (lot_id,student_id,transaction_type,bucket,quantity,note,actor_user_id,idempotency_key)
         VALUES(?,?,?,?,?,?,?,?)`);
