@@ -363,8 +363,12 @@ function createAdminV1Router(db) {
     const orderId = Number(req.params.id);
     const reason = String(req.body?.reason || '').trim().slice(0,500);
     const approvedCents = Number(req.body?.approvedCents);
-    if (!reason || !Number.isSafeInteger(approvedCents) || approvedCents < 0)
-      return res.status(400).json({error:'退款原因和确认退款金额（分）必填'});
+    const requestedCents = req.body && req.body.requestedCents != null ? Number(req.body.requestedCents) : approvedCents;
+    const adjustmentReason = String(req.body && req.body.adjustmentReason || '').trim().slice(0,500);
+    if (!reason || !Number.isSafeInteger(approvedCents) || approvedCents < 0 || !Number.isSafeInteger(requestedCents) || requestedCents < 0)
+      return res.status(400).json({error:'退款原因和有效退款金额（分）必填'});
+    if (requestedCents !== approvedCents && !adjustmentReason)
+      return res.status(400).json({error:'调整退款金额必须填写调整原因'});
     try {
       const result = db.transaction(() => {
         const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
@@ -372,12 +376,14 @@ function createAdminV1Router(db) {
         if (db.prepare('SELECT id FROM refunds WHERE order_id=?').get(orderId)) throw Object.assign(new Error('每个订单只允许一次退款'),{status:409});
         const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(orderId);
         const lots = db.prepare('SELECT * FROM entitlement_lots WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)').all(orderId);
-        let paidLessons = items.reduce((n,x)=>n+x.paid_lessons,0);
+        const paidLessons = items.reduce((n,x)=>n+x.paid_lessons,0);
         let consumedPaid = 0;
         const { balanceForLot, refundCap } = require('../domain/ledger');
         const balances = lots.map(lot => {
           const rows = db.prepare('SELECT * FROM entitlement_transactions WHERE lot_id=? ORDER BY id').all(lot.id);
-          consumedPaid += rows.filter(x=>x.transaction_type==='consume_paid').reduce((n,x)=>n+x.quantity,0);
+          const consumed = rows.filter(x=>x.transaction_type==='consume_paid').reduce((n,x)=>n+x.quantity,0);
+          const reversed = rows.filter(x=>x.transaction_type==='reverse').reduce((n,x)=>{const target=rows.find(y=>y.id===x.reference_transaction_id);return n+(target && target.transaction_type==='consume_paid'?x.quantity:0)},0);
+          consumedPaid += Math.max(0,consumed-reversed);
           return {lot,balance:balanceForLot(rows)};
         });
         const cap = refundCap({receivedCents:order.received_cents,paidLessons,consumedPaidLessons:consumedPaid});
@@ -392,8 +398,9 @@ function createAdminV1Router(db) {
           if (item.balance.bonus > 0) cancel.run(item.lot.id,item.lot.student_id,'bonus',item.balance.bonus,'退款取消剩余赠送课时',`refund-${refundId}-lot-${item.lot.id}-bonus`);
           db.prepare("UPDATE entitlement_lots SET status='refunded' WHERE id=?").run(item.lot.id);
         }
+        db.prepare('UPDATE refunds SET adjustment_reason=? WHERE id=?').run(adjustmentReason,refundId);
         db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(orderId);
-        record('order.refund','order',orderId,{refundId,approvedCents,cap,reason});
+        record('order.refund','order',orderId,{refundId,requestedCents,approvedCents,adjustmentReason,cap,reason});
         return {refundId,approvedCents,maximumRefundCents:cap};
       })();
       res.status(201).json(result);
