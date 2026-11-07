@@ -19,7 +19,11 @@ function ensureSession() {
 }
 
 function loadStudents() {
-  return ensureSession().then(()=>request('/api/parent/students')).then(students=>{
+  return ensureSession().then(()=>request('/api/parent/students')).catch(err=>{
+    if(err.statusCode!==401)throw err;
+    wx.removeStorageSync('leye_auth_token');
+    return ensureSession().then(()=>request('/api/parent/students'));
+  }).then(students=>{
     const currentId=wx.getStorageSync('leye_selected_student_id');
     let index=students.findIndex(item=>item.id===currentId);
     if(index<0)index=0;
