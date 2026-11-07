@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS entitlement_transactions (
   student_id INTEGER NOT NULL REFERENCES students(id),
   lesson_id INTEGER REFERENCES lessons(id),
   transaction_type TEXT NOT NULL CHECK(transaction_type IN ('grant_paid','grant_bonus','consume_paid','consume_bonus','reverse','refund_cancel')),
+  bucket TEXT CHECK(bucket IN ('paid','bonus')),
   quantity INTEGER NOT NULL CHECK(quantity > 0),
   reference_transaction_id INTEGER REFERENCES entitlement_transactions(id),
   note TEXT NOT NULL DEFAULT '',
