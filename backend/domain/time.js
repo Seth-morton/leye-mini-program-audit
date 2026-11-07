@@ -9,7 +9,7 @@ function partsAt(date, timeZone = TIME_ZONE) {
 }
 
 function localToUtc(dateText, timeText, timeZone = TIME_ZONE) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dateText) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(timeText))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(timeText))
     throw new Error('本地日期或时间格式无效');
   const [year,month,day] = dateText.split('-').map(Number);
   const [hour,minute] = timeText.split(':').map(Number);
