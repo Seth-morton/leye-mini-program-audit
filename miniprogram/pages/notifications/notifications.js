@@ -1,0 +1,2 @@
+const {ensureSession}=require('../../utils/parent');const {request}=require('../../utils/request');
+Page({data:{rows:[]},onShow(){ensureSession().then(()=>request('/api/parent/notifications')).then(rows=>this.setData({rows})).catch(e=>wx.showToast({title:e.message||'通知加载失败',icon:'none'}))},markRead(e){const id=e.currentTarget.dataset.id;request('/api/parent/notifications/'+id+'/read','POST',{}).then(()=>this.onShow())}});
