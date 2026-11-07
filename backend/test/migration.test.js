@@ -19,7 +19,7 @@ test('core migration creates teaching schema while retaining legacy tables', () 
     for (const table of ['families','students','lesson_series','lessons','orders','payments','entitlement_lots','entitlement_transactions','refunds','audit_logs']) {
       assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table), table);
     }
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 3);
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
