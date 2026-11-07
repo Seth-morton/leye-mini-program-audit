@@ -64,6 +64,19 @@ test('管理端对抗演练：容量、课程模式、授课确认和线下退�
   const dayData = await dayResponse.json();
   assert.equal(dayData.timezone, 'America/Chicago');
   assert.ok(dayData.lessons.some(x => x.id === lesson.id), '每日工作台必须按芝加哥本地日期列出课次');
+
+  const guardianId=db.prepare("INSERT INTO users(phone,display_name,role) VALUES('15555550123','测试家长','guardian')").run().lastInsertRowid;
+  const membershipId=db.prepare("INSERT INTO family_members(family_id,user_id,status) VALUES(?,?,'pending')").run(familyId,guardianId).lastInsertRowid;
+  const approval=await call('/family-members/'+membershipId+'/approve',{});
+  assert.equal(approval.status,200,'负责人审核应成功');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM student_guardians WHERE user_id=? AND status=\'approved\'').get(guardianId).n,2,'审核后应关联该家庭全部现有学员');
+  const permissions=await fetch(base+'/family-members/'+membershipId+'/permissions',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({canViewSchedule:true,canViewFinance:false,canViewGrowth:true})});
+  assert.equal(permissions.status,200);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM student_guardians WHERE user_id=? AND can_view_finance=1').get(guardianId).n,0,'关闭财务权限后，所有孩子都不应显示课时余额权限');
+  const revoked=await call('/family-members/'+membershipId+'/revoke',{reason:'测试撤销'});
+  assert.equal(revoked.status,200);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM student_guardians WHERE user_id=? AND status='approved'").get(guardianId).n,0,'撤销家庭监护权后所有孩子访问都应撤销');
+
   const earlyConfirm = await call('/lessons/' + lesson.id + '/students/' + studentA + '/confirm', {});
   assert.equal(earlyConfirm.status, 409, '课程尚未结束不得确认实际授课');
 
