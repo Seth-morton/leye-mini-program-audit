@@ -402,7 +402,7 @@ function createAdminV1Router(db) {
     if(!note.parent_summary.trim()&&!note.practice_tasks.trim())return res.status(400).json({error:'发布前必须填写家长可见的课堂反馈或练习任务'});
     const publishedAt=new Date().toISOString();
     db.transaction(()=>{
-      db.prepare("UPDATE lesson_notes SET status='published',reviewed_at=NULL,published_at=? WHERE id=?").run(publishedAt,id);
+      db.prepare("UPDATE lesson_notes SET status='published',published_at=? WHERE id=?").run(publishedAt,id);
       const guardians=db.prepare("SELECT sg.user_id FROM student_guardians sg WHERE sg.student_id=? AND sg.status='approved' AND sg.can_view_growth=1").all(note.student_id);
       const title='新的成长记录';
       const body=note.parent_summary.trim()||'老师发布了新的练习任务，请查看孩子的成长记录。';
