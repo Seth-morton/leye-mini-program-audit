@@ -68,7 +68,6 @@ npm run dev
 - `POST /api/admin/v1/orders/:id/refund`：登记退款审批，冻结剩余权益但不伪记为已退款
 - `POST /api/admin/v1/orders/:id/refund/complete`：线下实际退款完成后登记实际金额与差异原因
 - `GET /api/catalog/courses`：家长端只读课程目录（与旧预约课程表分离）
-- `POST /api/admin/v1/orders/:id/refund`
 - `POST /api/admin/v1/lessons`：单次课次，带资源冲突检查
 - `POST /api/admin/v1/lesson-series`：生成未来 12 周固定课次
 - `POST /api/admin/v1/lesson-series/:id/extend`：滚动补充未来课次
