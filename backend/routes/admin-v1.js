@@ -351,6 +351,69 @@ function createAdminV1Router(db) {
     }catch(error){res.status(error.status||500).json({error:error.message||'课次状态更新失败'});}
   });
 
+  router.get('/growth-notes',(req,res)=>{
+    const status=String(req.query.status||'all');
+    if(!['all','draft','pending_review','published'].includes(status))return res.status(400).json({error:'成长记录状态无效'});
+    const where=status==='all'?'':'WHERE n.status=?';
+    const rows=db.prepare(`SELECT n.id,n.lesson_id AS lessonId,n.student_id AS studentId,s.name AS studentName,
+      l.starts_at_utc AS lessonStartsAtUtc,n.internal_note AS internalNote,n.parent_summary AS parentSummary,
+      n.practice_tasks AS practiceTasks,n.status,n.published_at AS publishedAt,n.created_at AS createdAt
+      FROM lesson_notes n JOIN students s ON s.id=n.student_id JOIN lessons l ON l.id=n.lesson_id
+      ${where} ORDER BY n.id DESC LIMIT 300`).all(...(status==='all'?[]:[status]));
+    res.json(rows);
+  });
+
+  router.post('/lessons/:lessonId/students/:studentId/growth-notes',(req,res)=>{
+    const lessonId=Number(req.params.lessonId),studentId=Number(req.params.studentId);
+    const internalNote=String(req.body?.internalNote||'').trim().slice(0,4000);
+    const parentSummary=String(req.body?.parentSummary||'').trim().slice(0,4000);
+    const practiceTasks=String(req.body?.practiceTasks||'').trim().slice(0,4000);
+    if(!internalNote&&!parentSummary&&!practiceTasks)return res.status(400).json({error:'至少填写一项课堂记录、家长反馈或练习任务'});
+    const relation=db.prepare('SELECT l.id,l.status,ls.student_id FROM lessons l JOIN lesson_students ls ON ls.lesson_id=l.id WHERE l.id=? AND ls.student_id=?').get(lessonId,studentId);
+    if(!relation)return res.status(404).json({error:'课次或该课次学员不存在'});
+    if(!['scheduled','rescheduled','completed','archived'].includes(relation.status))return res.status(409).json({error:'停课课次不能创建成长记录'});
+    const id=db.prepare("INSERT INTO lesson_notes(lesson_id,student_id,internal_note,parent_summary,practice_tasks,status) VALUES(?,?,?,?,?,'draft')")
+      .run(lessonId,studentId,internalNote,parentSummary,practiceTasks).lastInsertRowid;
+    record('growth_note.created','lesson_note',id,{lessonId,studentId,status:'draft'});
+    res.status(201).json({id,status:'draft'});
+  });
+
+  router.patch('/growth-notes/:id',(req,res)=>{
+    const id=Number(req.params.id);
+    const current=db.prepare('SELECT * FROM lesson_notes WHERE id=?').get(id);
+    if(!current)return res.status(404).json({error:'成长记录不存在'});
+    if(current.status==='published')return res.status(409).json({error:'已发布记录不能直接覆盖；请使用更正流程保留历史'});
+    const internalNote=String(req.body?.internalNote??current.internal_note).trim().slice(0,4000);
+    const parentSummary=String(req.body?.parentSummary??current.parent_summary).trim().slice(0,4000);
+    const practiceTasks=String(req.body?.practiceTasks??current.practice_tasks).trim().slice(0,4000);
+    const status=String(req.body?.status||current.status);
+    if(!['draft','pending_review'].includes(status))return res.status(400).json({error:'只能保存草稿或提交审核'});
+    db.prepare('UPDATE lesson_notes SET internal_note=?,parent_summary=?,practice_tasks=?,status=? WHERE id=?')
+      .run(internalNote,parentSummary,practiceTasks,status,id);
+    record('growth_note.updated','lesson_note',id,{status,internalNote,parentSummary,practiceTasks});
+    res.json({ok:true,id,status});
+  });
+
+  router.post('/growth-notes/:id/publish',(req,res)=>{
+    const id=Number(req.params.id);
+    const note=db.prepare('SELECT * FROM lesson_notes WHERE id=?').get(id);
+    if(!note)return res.status(404).json({error:'成长记录不存在'});
+    if(note.status==='published')return res.status(409).json({error:'该成长记录已经发布'});
+    if(!note.parent_summary.trim()&&!note.practice_tasks.trim())return res.status(400).json({error:'发布前必须填写家长可见的课堂反馈或练习任务'});
+    const publishedAt=new Date().toISOString();
+    db.transaction(()=>{
+      db.prepare("UPDATE lesson_notes SET status='published',reviewed_at=NULL,published_at=? WHERE id=?").run(publishedAt,id);
+      const guardians=db.prepare("SELECT sg.user_id FROM student_guardians sg WHERE sg.student_id=? AND sg.status='approved' AND sg.can_view_growth=1").all(note.student_id);
+      const title='新的成长记录';
+      const body=note.parent_summary.trim()||'老师发布了新的练习任务，请查看孩子的成长记录。';
+      const payload=JSON.stringify({studentId:note.student_id,growthNoteId:id});
+      const insert=db.prepare("INSERT INTO notifications(user_id,type,title,body,payload_json) VALUES(?,'growth_note_published',?,?,?)");
+      guardians.forEach(g=>insert.run(g.user_id,title,body,payload));
+      record('growth_note.published','lesson_note',id,{status:'published',guardianNotifications:guardians.length});
+    })();
+    res.json({ok:true,id,status:'published',notificationsCreated:db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE type='growth_note_published' AND json_extract(payload_json,'$.growthNoteId')=?").get(id).n});
+  });
+
   router.get('/lessons/day', (req,res) => {
     const date=String(req.query.date||'');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
