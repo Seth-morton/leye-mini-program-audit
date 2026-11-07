@@ -1,29 +1,11 @@
 {
-  "pages": [
-    "pages/home/home",
-    "pages/courses/courses",
-    "pages/booking/booking",
-    "pages/me/me",
-    "pages/my-bookings/my-bookings",
-    "pages/about/about"
-  ],
-  "window": {
-    "navigationBarTitleText": "乐也",
-    "navigationBarBackgroundColor": "#172433",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#F7F5F0"
-  },
-  "tabBar": {
-    "color": "#8E8E93",
-    "selectedColor": "#007aff",
-    "backgroundColor": "#FFFFFF",
-    "borderStyle": "white",
-    "list": [
-      {"pagePath":"pages/home/home","text":"首页","iconPath":"assets/tabbar/home.png","selectedIconPath":"assets/tabbar/home-active.png"},
-      {"pagePath":"pages/courses/courses","text":"课程","iconPath":"assets/tabbar/course.png","selectedIconPath":"assets/tabbar/course-active.png"},
-      {"pagePath":"pages/booking/booking","text":"预约","iconPath":"assets/tabbar/booking.png","selectedIconPath":"assets/tabbar/booking-active.png"},
-      {"pagePath":"pages/me/me","text":"我的","iconPath":"assets/tabbar/me.png","selectedIconPath":"assets/tabbar/me-active.png"}
-    ]
-  },
-  "sitemapLocation": "sitemap.json"
+  "pages":["pages/home/home","pages/schedule/schedule","pages/growth/growth","pages/entitlements/entitlements","pages/me/me","pages/notifications/notifications","pages/courses/courses","pages/about/about"],
+  "window":{"navigationBarTitleText":"乐也","navigationBarBackgroundColor":"#172433","navigationBarTextStyle":"white","backgroundColor":"#F4F5F6"},
+  "tabBar":{"color":"#8E8E93","selectedColor":"#172433","backgroundColor":"#FFFFFF","borderStyle":"white","list":[
+    {"pagePath":"pages/home/home","text":"首页","iconPath":"assets/tabbar/home.png","selectedIconPath":"assets/tabbar/home-active.png"},
+    {"pagePath":"pages/schedule/schedule","text":"课表","iconPath":"assets/tabbar/course.png","selectedIconPath":"assets/tabbar/course-active.png"},
+    {"pagePath":"pages/growth/growth","text":"成长","iconPath":"assets/tabbar/booking.png","selectedIconPath":"assets/tabbar/booking-active.png"},
+    {"pagePath":"pages/entitlements/entitlements","text":"课时","iconPath":"assets/tabbar/course.png","selectedIconPath":"assets/tabbar/course-active.png"},
+    {"pagePath":"pages/me/me","text":"我的","iconPath":"assets/tabbar/me.png","selectedIconPath":"assets/tabbar/me-active.png"}
+  ]},"sitemapLocation":"sitemap.json"
 }

@@ -1,10 +1,1 @@
-.page{padding-bottom:calc(100rpx + env(safe-area-inset-bottom))}
-.hero{background:#172433;color:#fff;border-radius:24px;padding:40rpx 32rpx;margin-bottom:16px;box-shadow:0 8px 24px rgba(23,36,51,.18)}
-.eyebrow{font-size:20rpx;letter-spacing:4rpx;color:#C6D0D8}.hero-title{font-size:48rpx;line-height:1.5;font-weight:600;margin:24rpx 0}
-.hero-sub{font-size:24rpx;color:#D5DCE3}
-.hero-btn{margin:32rpx 0 8rpx;box-shadow:0 4px 14px rgba(0,122,255,0.3)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:20rpx}
-.course-card{background:#fff;border-radius:16px;padding:26rpx;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
-.course-icon{font-size:44rpx;color:#52677A}.course-name{font-weight:700;margin:16rpx 0}
-.course-card .muted{color:#8E8E93}
-.more{font-size:24rpx;color:#687681}.about{margin-top:28rpx}
+page{background:#f4f5f6}.page{padding:24rpx 28rpx calc(110rpx + env(safe-area-inset-bottom))}.hero{background:#172433;color:#fff;border-radius:24rpx;padding:38rpx 32rpx;margin-bottom:22rpx}.eyebrow{font-size:20rpx;letter-spacing:4rpx;color:#c6d0d8}.hero-title{font-size:46rpx;line-height:1.5;font-weight:600;margin:20rpx 0}.hero-sub{font-size:24rpx;color:#d5dce3}.card{background:#fff;border-radius:18rpx;padding:28rpx;margin:18rpx 0}.row{display:flex;justify-content:space-between;align-items:center}.section-title{font-size:30rpx;font-weight:600;color:#172433}.student-name{font-size:40rpx;font-weight:600;margin:24rpx 0 8rpx}.muted{font-size:24rpx;color:#87919a;line-height:1.7}.switch{font-size:24rpx;color:#52677a}.primary{background:#172433;color:#fff;border-radius:12rpx;margin-top:24rpx;font-size:28rpx}.lesson-row{padding:16rpx 0;border-bottom:1rpx solid #eef0f2}.lesson-row:last-child{border:0}.lesson-name{font-size:28rpx;font-weight:600}.about{margin-top:28rpx}
