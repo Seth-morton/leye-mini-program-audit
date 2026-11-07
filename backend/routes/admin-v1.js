@@ -46,10 +46,14 @@ function createAdminV1Router(db) {
       return res.status(400).json({ error: '家庭和学员姓名为必填项' });
     if (!db.prepare('SELECT id FROM families WHERE id=? AND status=?').get(familyId, 'active'))
       return res.status(404).json({ error: '家庭不存在或已归档' });
-    const result = db.prepare('INSERT INTO students(family_id,name,birth_date,notes) VALUES(?,?,?,?)')
-      .run(familyId, name, req.body?.birthDate || null, String(req.body?.notes || '').slice(0, 1000));
-    record('student.create', 'student', result.lastInsertRowid, { familyId, name });
-    res.status(201).json({ id: result.lastInsertRowid, familyId, name });
+    const result = db.transaction(() => {
+      const studentId = db.prepare('INSERT INTO students(family_id,name,birth_date,notes) VALUES(?,?,?,?)')
+        .run(familyId, name, req.body?.birthDate || null, String(req.body?.notes || '').slice(0, 1000)).lastInsertRowid;
+      db.prepare("INSERT OR IGNORE INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth) SELECT ?,user_id,'approved',can_view_schedule,can_view_finance,can_view_growth FROM family_members WHERE family_id=? AND status='approved'").run(studentId,familyId);
+      return studentId;
+    })();
+    record('student.create', 'student', result, { familyId, name });
+    res.status(201).json({ id: result, familyId, name });
   });
 
   router.get('/teachers', (req, res) => res.json(db.prepare('SELECT * FROM teachers ORDER BY name').all()));
