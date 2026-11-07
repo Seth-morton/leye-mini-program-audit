@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   course_id INTEGER NOT NULL REFERENCES courses_catalog(id),
   teacher_id INTEGER NOT NULL REFERENCES teachers(id),
   room_id INTEGER NOT NULL REFERENCES rooms(id),
+  mode TEXT NOT NULL CHECK(mode IN ('one_to_one','small_group','collective','exam')),
   starts_at_utc TEXT NOT NULL,
   ends_at_utc TEXT NOT NULL,
   timezone TEXT NOT NULL DEFAULT 'America/Chicago',
