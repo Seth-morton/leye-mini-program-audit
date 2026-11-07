@@ -276,6 +276,26 @@ function createAdminV1Router(db) {
     }catch(error){res.status(error.status||409).json({error:error.message||'续排失败'});}
   });
 
+  router.get('/lessons/day', (req,res) => {
+    const date=String(req.query.date||'');
+    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
+    try {
+      const from=localToUtc(date+'T00:00:00',TIME_ZONE);
+      const next=addLocalDays(date,1);
+      const to=localToUtc(next+'T00:00:00',TIME_ZONE);
+      const rows=db.prepare(`SELECT l.id,l.status,l.mode,l.starts_at_utc,l.ends_at_utc,
+        t.name AS teacher_name,r.name AS room_name,c.name AS course_name,
+        ls.student_id,s.name AS student_name,ls.attendance_status,ls.teacher_confirmed,
+        ls.actual_teacher_id,at.name AS actual_teacher_name
+        FROM lessons l JOIN teachers t ON t.id=l.teacher_id
+        JOIN rooms r ON r.id=l.room_id JOIN courses_catalog c ON c.id=l.course_id
+        JOIN lesson_students ls ON ls.lesson_id=l.id JOIN students s ON s.id=ls.student_id
+        LEFT JOIN teachers at ON at.id=ls.actual_teacher_id
+        WHERE l.starts_at_utc>=? AND l.starts_at_utc<? ORDER BY l.starts_at_utc,l.id,s.name`).all(from,to);
+      res.json({date,timezone:TIME_ZONE,lessons:rows});
+    } catch(error) {res.status(400).json({error:error.message||'日期转换失败'});}
+  });
+
   router.get('/lessons', (req, res) => {
     const from = String(req.query.from || '');
     const to = String(req.query.to || '');
