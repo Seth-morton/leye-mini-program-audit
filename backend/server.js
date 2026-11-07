@@ -6,6 +6,9 @@ const path = require('node:path');
 const db = require('./db');
 const { validateBooking } = require('./validation');
 const { createAdminV1Router } = require('./routes/admin-v1');
+const { createAuthRouter } = require('./routes/auth');
+const { createParentRouter } = require('./routes/parent');
+const { requireAuth, requireGuardian } = require('./middleware/auth');
 
 const app = express();
 app.disable('x-powered-by');
@@ -87,6 +90,8 @@ app.patch('/api/admin/bookings/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+app.use('/api/auth', createAuthRouter(db));
+app.use('/api/parent', requireAuth(db), requireGuardian, createParentRouter(db));
 app.use('/api/admin/v1', requireAdmin, createAdminV1Router(db));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.use((err, req, res, next) => {
