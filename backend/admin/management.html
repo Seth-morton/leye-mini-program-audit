@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>乐也 · 教学管理</title>
+<style>
+:root{font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#172433;background:#f4f5f6}
+*{box-sizing:border-box}body{margin:0}header{background:#172433;color:#fff;padding:22px max(20px,calc((100% - 1120px)/2))}
+main{max-width:1120px;margin:24px auto;padding:0 18px}.panel{background:#fff;border:1px solid #e7eaed;border-radius:14px;padding:18px;margin-bottom:16px}
+h1{font-size:21px;margin:0 0 5px}h2{font-size:17px;margin:0 0 14px}.muted{color:#74808a;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+input,select,textarea,button{font:inherit;border:1px solid #d8dee3;border-radius:8px;padding:10px;background:#fff;min-width:0;width:100%}
+textarea{min-height:68px}button{background:#172433;color:#fff;border:0;cursor:pointer}button.secondary{background:#eef1f3;color:#172433}
+.actions{display:flex;gap:8px;margin-top:10px}.actions button{width:auto}.status{white-space:pre-wrap;background:#f7f8f9;padding:12px;border-radius:8px;font-size:13px;max-height:260px;overflow:auto}
+@media(max-width:720px){.grid,.fields{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>乐也 · 教学管理</h1><div class="muted" style="color:#c5cdd4">负责人管理端 · V1 开发版</div></header>
+<main>
+<section class="panel">
+<h2>管理员连接</h2>
+<div class="fields"><input id="token" type="password" placeholder="输入服务端 ADMIN_TOKEN"><input id="api" value="" placeholder="API 地址，默认当前域名"></div>
+<div class="actions"><button id="check">连接并查看概览</button><button class="secondary" id="clear">清除令牌</button></div>
+<p class="muted">令牌仅保存在当前页面内存中，不会写入小程序。当前仍为开发期管理令牌认证，正式上线前必须替换为具备账号、会话和权限控制的管理员登录。</p>
+</section>
+<div class="grid">
+<section class="panel"><h2>新建家庭</h2><form data-path="/api/admin/v1/families"><div class="fields"><input name="name" placeholder="家庭名称（必填）" required><input name="notes" placeholder="备注"></div><div class="actions"><button>创建家庭</button></div></form></section>
+<section class="panel"><h2>新建学员</h2><form data-path="/api/admin/v1/students"><div class="fields"><input name="familyId" type="number" placeholder="家庭 ID" required><input name="name" placeholder="学员姓名" required><input name="birthDate" type="date"><input name="notes" placeholder="备注"></div><div class="actions"><button>创建学员</button></div></form></section>
+<section class="panel"><h2>添加教师</h2><form data-path="/api/admin/v1/teachers"><div class="fields"><input name="name" placeholder="教师姓名" required><input name="phone" placeholder="联系电话"><input name="notes" placeholder="备注"></div><div class="actions"><button>添加教师</button></div></form></section>
+<section class="panel"><h2>添加教室</h2><form data-path="/api/admin/v1/rooms"><div class="fields"><input name="name" placeholder="教室名称" required><input name="capacity" type="number" min="1" value="1" placeholder="容量"><input name="notes" placeholder="备注"></div><div class="actions"><button>添加教室</button></div></form></section>
+<section class="panel"><h2>创建课程</h2><form data-path="/api/admin/v1/courses"><div class="fields"><input name="name" placeholder="课程名称" required><select name="mode"><option value="one_to_one">一对一</option><option value="small_group">小班</option><option value="collective">集体</option><option value="exam">艺考</option></select><input name="category" value="声乐" placeholder="分类"><input name="description" placeholder="课程说明"></div><div class="actions"><button>创建课程</button></div></form></section>
+<section class="panel"><h2>创建课程商品</h2><form id="productForm"><div class="fields"><input name="courseId" type="number" placeholder="课程 ID" required><input name="name" placeholder="商品名称，如 10 节赠 2 节" required><input name="priceCents" type="number" min="0" placeholder="价格（分）" required><input name="paidLessons" type="number" min="0" placeholder="付费课时" required><input name="bonusLessons" type="number" min="0" value="0" placeholder="赠送课时"><input name="validityDays" type="number" min="1" placeholder="有效天数，留空不限"></div><div class="actions"><button>创建商品</button></div></form></section>
+<section class="panel"><h2>创建订单</h2><form data-path="/api/admin/v1/orders"><div class="fields"><input name="studentId" type="number" placeholder="学员 ID" required><input name="productId" type="number" placeholder="商品 ID" required></div><div class="actions"><button>创建线下订单</button></div></form></section>
+<section class="panel"><h2>登记线下收款</h2><form id="paymentForm"><div class="fields"><input name="orderId" type="number" placeholder="订单 ID" required><input name="amountCents" type="number" min="1" placeholder="本次收款金额（分）" required><select name="method"><option>bank_transfer</option><option>cash</option><option>other</option></select><input name="receivedAt" type="datetime-local"></div><div class="actions"><button>登记收款</button></div></form></section>
+<section class="panel"><h2>提前开通课时</h2><form id="activateForm"><div class="fields"><input name="orderId" type="number" placeholder="订单 ID" required><input name="reason" placeholder="负责人授权原因" required></div><div class="actions"><button>授权开通</button></div></form></section>
+<section class="panel"><h2>登记一次性退款</h2><form id="refundForm"><div class="fields"><input name="orderId" type="number" placeholder="订单 ID" required><input name="approvedCents" type="number" min="0" placeholder="确认退款金额（分）" required><input name="reason" placeholder="退款原因" required></div><div class="actions"><button>确认退款</button></div></form></section>
+</div>
+<section class="panel"><h2>操作结果</h2><div id="output" class="status">尚未执行操作。</div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function base(){return $('api').value.trim().replace(/\/$/,'')||location.origin}
+function show(x){$('output').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
+async function api(path,method='GET',body){const r=await fetch(base()+path,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+$('token').value.trim()},body:body?JSON.stringify(body):undefined});const data=await r.json();if(!r.ok)throw Error(data.error||'请求失败');return data}
+function data(form){const o={};new FormData(form).forEach((v,k)=>{if(v!=='')o[k]=v});for(const k of Object.keys(o)){if(['familyId','studentId','productId','courseId','priceCents','paidLessons','bonusLessons','validityDays','capacity','orderId','amountCents','approvedCents'].includes(k))o[k]=Number(o[k])}return o}
+document.querySelectorAll('form[data-path]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();try{show(await api(form.dataset.path,'POST',data(form)));form.reset()}catch(err){show(err.message)}}));
+for(const [id,path] of [['productForm',null],['paymentForm',null],['activateForm',null],['refundForm',null]])$(id).addEventListener('submit',async e=>{e.preventDefault();try{const v=data(e.currentTarget);let result;if(id==='productForm'){const courseId=v.courseId;delete v.courseId;result=await api('/api/admin/v1/courses/'+courseId+'/products','POST',v)}else if(id==='paymentForm'){const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/payments','POST',v)}else if(id==='activateForm'){const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/early-activate','POST',v)}else{const orderId=v.orderId;delete v.orderId;result=await api('/api/admin/v1/orders/'+orderId+'/refund','POST',v)}show(result);e.currentTarget.reset()}catch(err){show(err.message)}});
+$('check').onclick=async()=>{try{show(await api('/api/admin/v1/overview'))}catch(e){show(e.message)}};
+$('clear').onclick=()=>{$('token').value='';show('已清除页面内的令牌。')};
+</script>
+</body></html>
