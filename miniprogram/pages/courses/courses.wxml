@@ -4,6 +4,6 @@
     <view class="row"><view class="course-title">{{item.name}}</view><view class="pill">{{item.category}}</view></view>
     <view class="muted desc">{{item.description}}</view>
     <view class="row"><view class="muted">{{item.audience}}</view><view class="price">{{item.priceText}}</view></view>
-    <button class="small-btn" data-id="{{item.id}}" bindtap="bookCourse">预约咨询</button>
+    <button class="small-btn" data-id="{{item.id}}" bindtap="bookCourse">课程咨询</button>
   </view>
 </view>
