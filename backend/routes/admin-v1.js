@@ -1,4 +1,5 @@
 const express = require('express');
+const { localToUtc, utcToLocalDate, addLocalDays, weekdayOf, TIME_ZONE } = require('../domain/time');
 
 function createAdminV1Router(db) {
   const router = express.Router();
@@ -167,6 +168,92 @@ function createAdminV1Router(db) {
     res.json({ ok: true });
   });
 
+
+
+  function buildSeriesLessons(series, studentIds, fromDate, count) {
+    let date = fromDate;
+    while (weekdayOf(date) !== series.weekday) date = addLocalDays(date,1);
+    const occurrences = [];
+    for (let i=0;i<count;i++) {
+      if (series.ends_on && date > series.ends_on) break;
+      const startsAtUtc = localToUtc(date,series.start_time,TIME_ZONE);
+      const endsAtUtc = new Date(Date.parse(startsAtUtc)+series.duration_minutes*60000).toISOString();
+      const overlap = db.prepare(`SELECT l.id FROM lessons l WHERE l.status IN ('scheduled','rescheduled')
+        AND l.starts_at_utc < ? AND l.ends_at_utc > ?
+        AND (l.teacher_id=? OR l.room_id=? OR EXISTS(
+          SELECT 1 FROM lesson_students ls WHERE ls.lesson_id=l.id AND ls.student_id IN (${studentIds.map(()=>'?').join(',')})
+        )) LIMIT 1`).get(endsAtUtc,startsAtUtc,series.teacher_id,series.room_id,...studentIds);
+      if (overlap) throw Object.assign(new Error(`排课冲突：${date}，冲突课次 #${overlap.id}`),{status:409});
+      occurrences.push({date,startsAtUtc,endsAtUtc});
+      date = addLocalDays(date,7);
+    }
+    return occurrences;
+  }
+
+  router.post('/lesson-series', (req,res) => {
+    const courseId=Number(req.body?.courseId),teacherId=Number(req.body?.teacherId),roomId=Number(req.body?.roomId);
+    const studentIds=Array.isArray(req.body?.studentIds)?[...new Set(req.body.studentIds.map(Number))]:[];
+    const weekday=Number(req.body?.weekday),startTime=String(req.body?.startTime||''),duration=Number(req.body?.durationMinutes);
+    const startsOn=String(req.body?.startsOn||''),endsOn=req.body?.endsOn?String(req.body.endsOn):null,mode=req.body?.mode;
+    if (![courseId,teacherId,roomId].every(x=>Number.isInteger(x)&&x>0)||!studentIds.length||
+        studentIds.some(x=>!Number.isInteger(x)||x<1)||!Number.isInteger(weekday)||weekday<0||weekday>6||
+        !Number.isInteger(duration)||duration<10||duration>360||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime)||
+        !/^\\d{4}-\\d{2}-\\d{2}$/.test(startsOn)||(endsOn&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(endsOn))||
+        (endsOn&&endsOn<startsOn)||!['one_to_one','small_group','collective','exam'].includes(mode))
+      return res.status(400).json({error:'固定排课参数无效'});
+    if(mode==='one_to_one'&&studentIds.length!==1)return res.status(400).json({error:'一对一课程只能安排一名学员'});
+    const refs=db.prepare('SELECT (SELECT COUNT(*) FROM courses_catalog WHERE id=?) AS c,(SELECT COUNT(*) FROM teachers WHERE id=? AND active=1) AS t,(SELECT COUNT(*) FROM rooms WHERE id=? AND active=1) AS r').get(courseId,teacherId,roomId);
+    if(!refs.c||!refs.t||!refs.r)return res.status(400).json({error:'课程、教师或教室不可用'});
+    const students=db.prepare(`SELECT COUNT(*) AS n FROM students WHERE id IN (${studentIds.map(()=>'?').join(',')}) AND status='active'`).get(...studentIds).n;
+    if(students!==studentIds.length)return res.status(400).json({error:'学员不存在或不可用'});
+    try{
+      const result=db.transaction(()=>{
+        const seriesId=db.prepare(`INSERT INTO lesson_series(student_id,class_name,course_id,teacher_id,room_id,mode,weekday,start_time,duration_minutes,starts_on,ends_on)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(studentIds.length===1?studentIds[0]:null,String(req.body?.className||'').slice(0,80)||null,courseId,teacherId,roomId,mode,weekday,startTime,duration,startsOn,endsOn).lastInsertRowid;
+        const series={weekday,start_time:startTime,duration_minutes:duration,teacher_id:teacherId,room_id:roomId,ends_on:endsOn};
+        const occurrences=buildSeriesLessons(series,studentIds,startsOn,12);
+        const addLesson=db.prepare(`INSERT INTO lessons(series_id,course_id,teacher_id,room_id,mode,starts_at_utc,ends_at_utc,timezone)
+          VALUES(?,?,?,?,?,?,?,?)`);
+        const addStudent=db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
+        const ids=[];
+        for(const item of occurrences){
+          const lessonId=addLesson.run(seriesId,courseId,teacherId,roomId,mode,item.startsAtUtc,item.endsAtUtc,TIME_ZONE).lastInsertRowid;
+          studentIds.forEach(studentId=>addStudent.run(lessonId,studentId));
+          ids.push(lessonId);
+        }
+        record('lesson_series.create','lesson_series',seriesId,{studentIds,occurrences:occurrences.length,startsOn,endsOn});
+        return {seriesId,lessonIds:ids,generated:ids.length,timezone:TIME_ZONE};
+      })();
+      res.status(201).json(result);
+    }catch(error){res.status(error.status||400).json({error:error.message||'固定排课创建失败'});}
+  });
+
+  router.post('/lesson-series/:id/extend', (req,res) => {
+    const seriesId=Number(req.params.id);
+    try{
+      const result=db.transaction(()=>{
+        const series=db.prepare('SELECT * FROM lesson_series WHERE id=? AND status=?').get(seriesId,'active');
+        if(!series)throw Object.assign(new Error('固定排课不存在或已停用'),{status:404});
+        const last=db.prepare('SELECT MAX(starts_at_utc) AS last FROM lessons WHERE series_id=?').get(seriesId).last;
+        const fromDate=last?addLocalDays(utcToLocalDate(last,TIME_ZONE),1):series.starts_on;
+        const students=series.student_id?[series.student_id]:db.prepare('SELECT student_id FROM lesson_students ls JOIN lessons l ON l.id=ls.lesson_id WHERE l.series_id=? GROUP BY student_id').all(seriesId).map(x=>x.student_id);
+        if(!students.length)throw new Error('固定排课尚未配置学员');
+        const occurrences=buildSeriesLessons(series,students,fromDate,12);
+        const addLesson=db.prepare(`INSERT INTO lessons(series_id,course_id,teacher_id,room_id,mode,starts_at_utc,ends_at_utc,timezone)
+          VALUES(?,?,?,?,?,?,?,?)`);
+        const addStudent=db.prepare('INSERT INTO lesson_students(lesson_id,student_id) VALUES(?,?)');
+        const ids=[];
+        for(const item of occurrences){
+          const lessonId=addLesson.run(seriesId,series.course_id,series.teacher_id,series.room_id,series.mode,item.startsAtUtc,item.endsAtUtc,TIME_ZONE).lastInsertRowid;
+          students.forEach(studentId=>addStudent.run(lessonId,studentId));
+          ids.push(lessonId);
+        }
+        record('lesson_series.extend','lesson_series',seriesId,{generated:ids.length,fromDate});
+        return {seriesId,lessonIds:ids,generated:ids.length,timezone:TIME_ZONE};
+      })();
+      res.json(result);
+    }catch(error){res.status(error.status||409).json({error:error.message||'续排失败'});}
+  });
 
   router.get('/lessons', (req, res) => {
     const from = String(req.query.from || '');
