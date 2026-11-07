@@ -430,7 +430,7 @@ function createAdminV1Router(db) {
     if (!lesson) return res.status(404).json({error:'课次不存在'});
     if (!['scheduled','rescheduled'].includes(lesson.status)) return res.status(409).json({error:'已取消、归档或完成的课次不能再次确认授课'});
     if (Date.parse(lesson.ends_at_utc) > Date.now()) return res.status(409).json({error:'课程尚未结束，不能确认实际完成授课'});
-    const studentLesson=db.prepare('SELECT teacher_confirmed FROM lesson_students WHERE lesson_id=? AND student_id=?').get(lessonId,studentId);
+    const studentLesson=db.prepare('SELECT teacher_confirmed,attendance_status FROM lesson_students WHERE lesson_id=? AND student_id=?').get(lessonId,studentId);
     if(!studentLesson)return res.status(404).json({error:'课次学员记录不存在'});
     if(studentLesson.teacher_confirmed)return res.status(409).json({error:'该学员已确认实际授课；如需更正请走负责人更正流程'});
     if(!['pending','present'].includes(studentLesson.attendance_status))return res.status(409).json({error:'该学员已标记请假或缺勤，不能确认实际授课'});
