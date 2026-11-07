@@ -310,6 +310,47 @@ function createAdminV1Router(db) {
     }catch(error){res.status(error.status||409).json({error:error.message||'续排失败'});}
   });
 
+  router.patch('/lessons/:lessonId/students/:studentId/attendance',(req,res)=>{
+    const lessonId=Number(req.params.lessonId),studentId=Number(req.params.studentId);
+    const status=String(req.body?.status||'');
+    if(!['pending','student_absent','student_leave'].includes(status))return res.status(400).json({error:'考勤状态无效'});
+    try{
+      const result=db.transaction(()=>{
+        const lesson=db.prepare("SELECT status FROM lessons WHERE id=?").get(lessonId);
+        if(!lesson)throw Object.assign(new Error('课次不存在'),{status:404});
+        if(!['scheduled','rescheduled'].includes(lesson.status))throw Object.assign(new Error('已关闭课次不能修改考勤'),{status:409});
+        const row=db.prepare('SELECT attendance_status FROM lesson_students WHERE lesson_id=? AND student_id=?').get(lessonId,studentId);
+        if(!row)throw Object.assign(new Error('课次学员记录不存在'),{status:404});
+        const consumed=db.prepare("SELECT COUNT(*) AS n FROM entitlement_transactions WHERE lesson_id=? AND student_id=? AND transaction_type IN ('consume_paid','consume_bonus')").get(lessonId,studentId).n;
+        if(consumed)throw Object.assign(new Error('该学员已有消课流水，不能直接改写考勤；请走课时冲正更正流程'),{status:409});
+        db.prepare('UPDATE lesson_students SET attendance_status=?,teacher_confirmed=0,actual_teacher_id=NULL,confirmed_at=NULL WHERE lesson_id=? AND student_id=?').run(status,lessonId,studentId);
+        record('lesson.attendance_updated','lesson_student',lessonId+':'+studentId,{status});
+        return {ok:true,status};
+      })();
+      res.json(result);
+    }catch(error){res.status(error.status||500).json({error:error.message||'考勤更新失败'});}
+  });
+
+  router.patch('/lessons/:lessonId/status',(req,res)=>{
+    const lessonId=Number(req.params.lessonId),status=String(req.body?.status||''),reason=String(req.body?.reason||'').trim().slice(0,500);
+    if(!['teacher_unavailable','studio_cancelled'].includes(status)||!reason)return res.status(400).json({error:'停课状态和原因必填'});
+    try{
+      const result=db.transaction(()=>{
+        const lesson=db.prepare('SELECT status FROM lessons WHERE id=?').get(lessonId);
+        if(!lesson)throw Object.assign(new Error('课次不存在'),{status:404});
+        if(!['scheduled','rescheduled'].includes(lesson.status))throw Object.assign(new Error('该课次已关闭，不能再次停课'),{status:409});
+        const consumed=db.prepare("SELECT COUNT(*) AS n FROM entitlement_transactions WHERE lesson_id=? AND transaction_type IN ('consume_paid','consume_bonus')").get(lessonId).n;
+        if(consumed)throw Object.assign(new Error('该课次已有消课流水，必须先完成课时冲正更正'),{status:409});
+        const attendance=status==='teacher_unavailable'?'teacher_unavailable':'studio_cancelled';
+        db.prepare('UPDATE lessons SET status=? WHERE id=?').run(status,lessonId);
+        db.prepare('UPDATE lesson_students SET attendance_status=?,teacher_confirmed=0,actual_teacher_id=NULL,confirmed_at=NULL WHERE lesson_id=?').run(attendance,lessonId);
+        record('lesson.status_changed','lesson',lessonId,{status,reason},reason);
+        return {ok:true,status,reason,noAutomaticConsumption:true};
+      })();
+      res.json(result);
+    }catch(error){res.status(error.status||500).json({error:error.message||'课次状态更新失败'});}
+  });
+
   router.get('/lessons/day', (req,res) => {
     const date=String(req.query.date||'');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({error:'请提供芝加哥本地日期 YYYY-MM-DD'});
@@ -391,7 +432,8 @@ function createAdminV1Router(db) {
     if (Date.parse(lesson.ends_at_utc) > Date.now()) return res.status(409).json({error:'课程尚未结束，不能确认实际完成授课'});
     const studentLesson=db.prepare('SELECT teacher_confirmed FROM lesson_students WHERE lesson_id=? AND student_id=?').get(lessonId,studentId);
     if(!studentLesson)return res.status(404).json({error:'课次学员记录不存在'});
-    if(studentLesson.teacher_confirmed)return res.status(409).json({error:'该学员已確認实际授课；如需更正请走负责人更正流程'});
+    if(studentLesson.teacher_confirmed)return res.status(409).json({error:'该学员已确认实际授课；如需更正请走负责人更正流程'});
+    if(!['pending','present'].includes(studentLesson.attendance_status))return res.status(409).json({error:'该学员已标记请假或缺勤，不能确认实际授课'});
     const actualTeacherId = Number(req.body?.actualTeacherId || lesson.teacher_id);
     if (!db.prepare('SELECT id FROM teachers WHERE id=? AND active=1').get(actualTeacherId))
       return res.status(400).json({error:'实际授课教师不存在或不可用'});
