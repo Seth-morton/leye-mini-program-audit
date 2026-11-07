@@ -86,14 +86,27 @@ $('loadLessonDay').onclick=async()=>{
       const time=new Intl.DateTimeFormat('zh-CN',{timeZone:'America/Chicago',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
       head.textContent=time.format(new Date(lesson.starts_at_utc))+' · '+lesson.course_name+' · '+lesson.teacher_name+' · '+lesson.room_name+' · '+lesson.status;
       card.appendChild(head);
+      if(['scheduled','rescheduled'].includes(lesson.status)){
+        const stopRow=document.createElement('div');stopRow.className='actions';
+        for(const [status,label] of [['teacher_unavailable','教师无法授课'],['studio_cancelled','工作室停课']]){
+          const stop=document.createElement('button');stop.type='button';stop.className='secondary';stop.textContent=label;stop.style.width='auto';
+          stop.onclick=async()=>{const reason=prompt('请填写停课原因');if(!reason)return;try{show(await api('/api/admin/v1/lessons/'+lesson.id+'/status','PATCH',{status,reason}));$('loadLessonDay').click()}catch(e){show(e.message)}};
+          stopRow.appendChild(stop);
+        }
+        card.appendChild(stopRow);
+      }
       lesson.students.forEach(student=>{
         const line=document.createElement('div');line.className='row';line.style.cssText='gap:8px;margin-top:8px;flex-wrap:wrap';
         const label=document.createElement('span');label.textContent=student.student_name+'｜'+(student.attendance_status||'未考勤')+'｜'+(student.teacher_confirmed?'已确认授课':'未确认授课');
+        const leave=document.createElement('button');leave.type='button';leave.textContent='请假';leave.className='secondary';leave.style.width='auto';leave.disabled=!['scheduled','rescheduled'].includes(lesson.status)||!!student.teacher_confirmed;
+        leave.onclick=async()=>{try{show(await api('/api/admin/v1/lessons/'+lesson.id+'/students/'+student.student_id+'/attendance','PATCH',{status:'student_leave'}));$('loadLessonDay').click()}catch(e){show(e.message)}};
+        const absent=document.createElement('button');absent.type='button';absent.textContent='缺勤';absent.className='secondary';absent.style.width='auto';absent.disabled=!['scheduled','rescheduled'].includes(lesson.status)||!!student.teacher_confirmed;
+        absent.onclick=async()=>{try{show(await api('/api/admin/v1/lessons/'+lesson.id+'/students/'+student.student_id+'/attendance','PATCH',{status:'student_absent'}));$('loadLessonDay').click()}catch(e){show(e.message)}};
         const confirm=document.createElement('button');confirm.type='button';confirm.textContent='确认授课';confirm.style.width='auto';confirm.disabled=!!student.teacher_confirmed||!['scheduled','rescheduled'].includes(lesson.status)||Date.parse(lesson.ends_at_utc)>Date.now();
         confirm.onclick=async()=>{try{show(await api('/api/admin/v1/lessons/'+lesson.id+'/students/'+student.student_id+'/confirm','POST',{}));$('loadLessonDay').click()}catch(e){show(e.message)}};
         const consume=document.createElement('button');consume.type='button';consume.textContent='消课';consume.className='secondary';consume.style.width='auto';consume.disabled=!student.teacher_confirmed||!['scheduled','rescheduled'].includes(lesson.status)||Date.parse(lesson.ends_at_utc)>Date.now();
         consume.onclick=async()=>{try{show(await api('/api/admin/v1/lessons/'+lesson.id+'/students/'+student.student_id+'/consume','POST',{quantity:1}));$('loadLessonDay').click()}catch(e){show(e.message)}};
-        line.append(label,confirm,consume);card.appendChild(line);
+        line.append(label,leave,absent,confirm,consume);card.appendChild(line);
       });
       wrap.appendChild(card);
     }
