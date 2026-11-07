@@ -16,6 +16,21 @@ function createAdminV1Router(db) {
     });
   });
 
+
+  router.get('/products', (req,res) => {
+    res.json(db.prepare(`SELECT p.*,c.name AS course_name FROM course_products p JOIN courses_catalog c ON c.id=p.course_id ORDER BY p.id DESC`).all());
+  });
+  router.get('/orders', (req,res) => {
+    res.json(db.prepare(`SELECT o.*,s.name AS student_name FROM orders o JOIN students s ON s.id=o.student_id ORDER BY o.id DESC LIMIT 500`).all());
+  });
+  router.get('/family-members', (req,res) => {
+    const status=String(req.query.status||'pending');
+    if(!['pending','approved','revoked'].includes(status))return res.status(400).json({error:'状态无效'});
+    res.json(db.prepare(`SELECT fm.id,fm.family_id AS familyId,f.name AS familyName,fm.user_id AS userId,u.phone,u.display_name AS displayName,fm.relationship,fm.can_view_schedule AS canViewSchedule,fm.can_view_finance AS canViewFinance,fm.can_view_growth AS canViewGrowth,fm.status
+      FROM family_members fm JOIN families f ON f.id=fm.family_id JOIN users u ON u.id=fm.user_id
+      WHERE fm.status=? ORDER BY fm.id DESC`).all(status));
+  });
+
   router.get('/families', (req, res) => {
     res.json(db.prepare(`SELECT f.*, COUNT(DISTINCT s.id) AS student_count
       FROM families f LEFT JOIN students s ON s.family_id=f.id
