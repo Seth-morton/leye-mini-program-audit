@@ -162,16 +162,50 @@ function createAdminV1Router(db) {
     const id = Number(req.params.id);
     const member = db.prepare('SELECT id,family_id,user_id FROM family_members WHERE id=? AND status=?').get(id, 'pending');
     if (!member) return res.status(404).json({ error: '待审核关联不存在' });
-    db.prepare(`UPDATE family_members SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
-    db.prepare(`INSERT INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth)
-      SELECT s.id,fm.user_id,'approved',fm.can_view_schedule,fm.can_view_finance,fm.can_view_growth
-      FROM students s JOIN family_members fm ON fm.family_id=s.family_id WHERE fm.id=?
-      ON CONFLICT(student_id,user_id) DO UPDATE SET status='approved',can_view_schedule=excluded.can_view_schedule,can_view_finance=excluded.can_view_finance,can_view_growth=excluded.can_view_growth`).run(id);
-    record('guardian.binding_approved', 'family_member', id, { familyId: member.family_id, userId: member.user_id });
+    db.transaction(()=>{
+      db.prepare(`UPDATE family_members SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
+      db.prepare(`INSERT INTO student_guardians(student_id,user_id,status,can_view_schedule,can_view_finance,can_view_growth)
+        SELECT s.id,fm.user_id,'approved',fm.can_view_schedule,fm.can_view_finance,fm.can_view_growth
+        FROM students s JOIN family_members fm ON fm.family_id=s.family_id WHERE fm.id=?
+        ON CONFLICT(student_id,user_id) DO UPDATE SET status='approved',can_view_schedule=excluded.can_view_schedule,can_view_finance=excluded.can_view_finance,can_view_growth=excluded.can_view_growth`).run(id);
+      record('guardian.binding_approved', 'family_member', id, { familyId: member.family_id, userId: member.user_id });
+    })();
     res.json({ ok: true });
   });
 
 
+
+  router.patch('/family-members/:id/permissions',(req,res)=>{
+    const id=Number(req.params.id);
+    const member=db.prepare('SELECT id,family_id,user_id,status FROM family_members WHERE id=?').get(id);
+    if(!member)return res.status(404).json({error:'监护人关联不存在'});
+    if(member.status!=='approved')return res.status(409).json({error:'只有已审核关联可以调整权限'});
+    const keys=['canViewSchedule','canViewFinance','canViewGrowth'];
+    if(keys.some(k=>typeof req.body?.[k]!=='boolean'))return res.status(400).json({error:'必须明确提交课表、课时财务、成长记录三项权限'});
+    const values=keys.map(k=>req.body[k]?1:0);
+    db.transaction(()=>{
+      db.prepare('UPDATE family_members SET can_view_schedule=?,can_view_finance=?,can_view_growth=? WHERE id=?').run(...values,id);
+      db.prepare('UPDATE student_guardians SET can_view_schedule=?,can_view_finance=?,can_view_growth=? WHERE user_id=? AND student_id IN (SELECT id FROM students WHERE family_id=?)')
+        .run(...values,member.user_id,member.family_id);
+      record('guardian.permissions_updated','family_member',id,{canViewSchedule:!!values[0],canViewFinance:!!values[1],canViewGrowth:!!values[2]});
+    })();
+    res.json({ok:true,permissions:{canViewSchedule:!!values[0],canViewFinance:!!values[1],canViewGrowth:!!values[2]}});
+  });
+
+  router.post('/family-members/:id/revoke',(req,res)=>{
+    const id=Number(req.params.id);
+    const member=db.prepare('SELECT id,family_id,user_id,status FROM family_members WHERE id=?').get(id);
+    if(!member)return res.status(404).json({error:'监护人关联不存在'});
+    if(member.status==='revoked')return res.status(409).json({error:'该监护人关联已经撤销'});
+    const reason=String(req.body?.reason||'').trim().slice(0,500);
+    if(!reason)return res.status(400).json({error:'撤销授权必须填写原因'});
+    db.transaction(()=>{
+      db.prepare("UPDATE family_members SET status='revoked',reviewed_at=CURRENT_TIMESTAMP WHERE id=?").run(id);
+      db.prepare("UPDATE student_guardians SET status='revoked' WHERE user_id=? AND student_id IN (SELECT id FROM students WHERE family_id=?)").run(member.user_id,member.family_id);
+      record('guardian.binding_revoked','family_member',id,{familyId:member.family_id,userId:member.user_id},reason);
+    })();
+    res.json({ok:true});
+  });
 
   function buildSeriesLessons(series, studentIds, fromDate, count) {
     let date = fromDate;
