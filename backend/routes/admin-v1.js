@@ -369,9 +369,10 @@ function createAdminV1Router(db) {
     const parentSummary=String(req.body?.parentSummary||'').trim().slice(0,4000);
     const practiceTasks=String(req.body?.practiceTasks||'').trim().slice(0,4000);
     if(!internalNote&&!parentSummary&&!practiceTasks)return res.status(400).json({error:'至少填写一项课堂记录、家长反馈或练习任务'});
-    const relation=db.prepare('SELECT l.id,l.status,ls.student_id FROM lessons l JOIN lesson_students ls ON ls.lesson_id=l.id WHERE l.id=? AND ls.student_id=?').get(lessonId,studentId);
+    const relation=db.prepare('SELECT l.id,l.status,ls.student_id,ls.teacher_confirmed FROM lessons l JOIN lesson_students ls ON ls.lesson_id=l.id WHERE l.id=? AND ls.student_id=?').get(lessonId,studentId);
     if(!relation)return res.status(404).json({error:'课次或该课次学员不存在'});
     if(!['scheduled','rescheduled','completed','archived'].includes(relation.status))return res.status(409).json({error:'停课课次不能创建成长记录'});
+    if(!relation.teacher_confirmed)return res.status(409).json({error:'必须先确认实际完成授课，才能创建成长记录'});
     const id=db.prepare("INSERT INTO lesson_notes(lesson_id,student_id,internal_note,parent_summary,practice_tasks,status) VALUES(?,?,?,?,?,'draft')")
       .run(lessonId,studentId,internalNote,parentSummary,practiceTasks).lastInsertRowid;
     record('growth_note.created','lesson_note',id,{lessonId,studentId,status:'draft'});
